@@ -1,0 +1,65 @@
+# Build artifacts
+build/
+dist/
+*.jar
+*.jad
+*.class
+
+# ProGuard
+proguard/
+*.pro
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.project
+.classpath
+.settings/
+*.launch
+
+# OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Test outputs
+test-results/
+coverage/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# JAR signing
+*.keystore
+*.jks
+*.p12
+*.pfx
+
+# Python gateway
+gateway/__pycache__/
+gateway/.venv/
+gateway/venv/
+gateway/*.pyc
+gateway/*.pyo
+gateway/*.pyd
+gateway/.pytest_cache/
+gateway/.coverage
+
+# Local configuration
+local.properties
+gradle.properties
+gradle/
+gradlew
+gradlew.bat
+
+# Documentation builds
+docs/_build/
+docs/.build/
