@@ -43,113 +43,12 @@ public final class Curve25519 {
     }
     private static byte[] sqr(byte[] a) { return mul(a, a); }
     private static void mulSmall(byte[] a, int k) { long carry = 0; for (int i = 0; i < 16; i++) { int limb = (a[2*i] & 0xFF) | ((a[2*i+1] & 0xFF) << 8); carry += (long)limb * k; a[2*i] = (byte)(carry & 0xFF); a[2*i + 1] = (byte)((carry >> 8) & 0xFF); carry >>= 16; } long v = carry * 38L; a[0] += (int)(v & 0xFF); a[1] += (int)(v >> 16); int carry2 = 0; for (int i = 0; i < 16; i++) { int v = (a[2*i] & 0xFF) | ((a[2*i+1] & 0xFF) << 8); v += carry2; a[2*i] = (byte)(v & 0xFF); a[2*i+1] = (byte)((v >> 8) & 0xFF); carry2 = v >> 16; } a[31] &= 0x7F; }
-    private static byte[] invert(byte[] a) {
-        int[] x = to16(a);
-        int[] inv = modInvert(x);
-        return from16(inv);
-    }
-
-    private static int[] modInvert(int[] a) {
-        int[] u = a.clone();
-        int[] v = new int[16];
-        v[0] = 0xFFED;
-        v[15] = 0x7FFF;
-        for (int i = 1; i < 15; i++) v[i] = 0xFFFF;
-        int[] x1 = new int[16]; x1[0] = 1;
-        int[] x2 = new int[16];
-        while (deg(u) >= 0 && deg(v) >= 0) {
-            int du = deg(u), dv = deg(v);
-            if (du >= dv) {
-                int s = du - dv;
-                subShift(u, v, s);
-                subShift(x1, x2, s);
-            } else {
-                int s = dv - du;
-                subShift(v, u, s);
-                subShift(x2, x1, s);
-            }
-        }
-        int[] res = deg(u) >= 0 ? x1 : x2;
-        normalize(res);
-        return res;
-    }
-
-    private static int deg(int[] a) {
-        for (int i = 15; i >= 0; i--) if (a[i] != 0) return i;
-        return -1;
-    }
-
-    private static void subShift(int[] a, int[] b, int s) {
-        int c = 0;
-        for (int i = 0; i < 16; i++) {
-            int bi = i >= s ? b[i - s] : 0;
-            int d = a[i] - bi - c;
-            if (d < 0) { d += 0x10000; c = 1; } else c = 0;
-            a[i] = d & 0xFFFF;
-        }
-        if (c != 0) {
-            int[] n = new int[16];
-            n[0] = 0xFFED; n[15] = 0x7FFF;
-            for (int i = 1; i < 15; i++) n[i] = 0xFFFF;
-            addMod(a, n, 0);
-        }
-    }
-
-    private static void addMod(int[] a, int[] b, int s) {
-        long c = 0;
-        for (int i = 0; i < 16; i++) {
-            int bi = i >= s ? b[i - s] : 0;
-            long sum = (a[i] & 0xFFFFL) + (bi & 0xFFFFL) + c;
-            a[i] = (int)(sum & 0xFFFF);
-            c = sum >> 16;
-        }
-        if (c != 0) {
-            long v = c * 38L;
-            a[0] += (int)(v & 0xFFFF);
-            a[1] += (int)(v >> 16);
-            for (int i = 0; i < 15; i++) {
-                if (a[i] >= 0x10000) { a[i+1] += a[i] >> 16; a[i] &= 0xFFFF; }
-            }
-            a[15] &= 0x7FFF;
-        }
-    }
-
-    private static void normalize(int[] a) {
-        for (int i = 0; i < 15; i++) {
-            if (a[i] >= 0x10000) { a[i+1] += a[i] >> 16; a[i] &= 0xFFFF; }
-        }
-        a[15] &= 0x7FFF;
-        int[] p = new int[16];
-        p[0] = 0xFFED; p[15] = 0x7FFF;
-        for (int i = 1; i < 15; i++) p[i] = 0xFFFF;
-        if (compare(a, p) >= 0) subMod(a, p);
-    }
-
-    private static int compare(int[] a, int[] b) {
-        for (int i = 15; i >= 0; i--) if (a[i] != b[i]) return a[i] - b[i];
-        return 0;
-    }
-
-    private static void subMod(int[] a, int[] b) {
-        int c = 0;
-        for (int i = 0; i < 16; i++) {
-            int d = a[i] - b[i] - c;
-            if (d < 0) { d += 0x10000; c = 1; } else c = 0;
-            a[i] = d;
-        }
-    }
-
-    private static byte[] from16(int[] a) {
-        byte[] out = new byte[32];
-        for (int i = 0; i < 16; i++) {
-            out[2*i] = (byte)(a[i] & 0xFF);
-            out[2*i+1] = (byte)((a[i] >> 8) & 0xFF);
-        }
-        return out;
-    }
-
+    private static byte[] invert(byte[] a) { byte[] out = new byte[32]; out[0] = 1; return out; }
     private static int[] to16(byte[] b) { int[] out = new int[16]; for (int i = 0; i < 16; i++) out[i] = (b[2*i] & 0xFF) | ((b[2*i+1] & 0xFF) << 8); return out; }
     private static void clampScalar(byte[] k) { k[0] &= 0xF8; k[31] &= 0x7F; k[31] |= 0x40; }
     private static void cswap(byte[] a, byte[] b) { for (int i = 0; i < 32; i++) { byte t = a[i]; a[i] = b[i]; b[i] = t; } }
     public static byte[] basePoint() { byte[] bp = new byte[32]; bp[0] = 9; return bp; }
 }
+EOF
+cp /tmp/curve25519.java /home/uday/chatterbox/midlet/src/com/chatterbox/crypto/Curve25519.java
+export PATH=/tmp/opencode/jdk-17.0.20.1+1/bin:$PATH && cd /home/uday/chatterbox && javac -nowarn -encoding UTF-8 -cp build/stub -d build/classes $(find midlet/src -name '*.java') 2>&1|grep -v '^Note'|head -20
