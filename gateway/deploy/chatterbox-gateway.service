@@ -1,0 +1,43 @@
+[Unit]
+Description=Chatterbox IRC Gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gateway
+Group=gateway
+WorkingDirectory=/opt/chatterbox-gateway
+ExecStart=/opt/chatterbox-gateway/.venv/bin/python /opt/chatterbox-gateway/server.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/chatterbox-gateway
+CapabilityBoundingSet=
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RestrictAddressFamilies=AF_INET AF_INET6
+RestrictNamespaces=yes
+
+# Environment (REQUIRED: create /etc/chatterbox-gateway.env with GATEWAY_PASSWORD)
+EnvironmentFile=/etc/chatterbox-gateway.env
+
+# Defaults for optional settings
+Environment=GATEWAY_IRC_HOST=irc.libera.chat
+Environment=GATEWAY_IRC_PORT=6697
+Environment=GATEWAY_LISTEN_PORT=6667
+Environment=GATEWAY_RATE_LIMIT=10
+Environment=GATEWAY_MAX_CONN_PER_IP=10
+Environment=GATEWAY_LOG_LEVEL=INFO
+Environment=GATEWAY_TLS_VERIFY=true
+Environment=GATEWAY_MIN_PASSWORD_LEN=16
+
+[Install]
+WantedBy=multi-user.target
