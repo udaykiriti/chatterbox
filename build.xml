@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Chatterbox MIDlet build script (Apache Ant)
+  -------------------------------------------
+  Targets:
+    clean           - delete build artifacts
+    compile         - javac to build/classes (CLDC 1.1 / MIDP 2.0)
+    preverify       - preverify build/classes -> build/preverified
+    obfuscate       - ProGuard shrink/optimize/obfuscate build/preverified -> build/obfuscated
+    jar             - package build/obfuscated into dist/chatterbox.jar
+    jad             - generate dist/chatterbox.jad
+    dist            - full build: clean compile preverify obfuscate jar jad
+    test            - run JUnit tests (desktop JDK only)
+    sign            - sign the JAR (requires keystore env vars)
+    install-emu     - install to WTK emulator (if WTK_HOME set)
+  Properties (override on command line):
+    -Dwtk.home=/path/to/wtk2.5.2
+    -Dproguard.home=/path/to/proguard
+    -Dkeystore=my.keystore -Dalias=myalias -Dstorepass=xxx -Dkeypass=xxx
+-->
+<project name="Chatterbox" default="dist" basedir=".">
+
+  <!-- ==== User-overridable properties ==== -->
+  <property name="wtk.home" value="${env.WTK_HOME}"/>
+  <property name="proguard.home" value="${env.PROGUARD_HOME}"/>
+  <property name="keystore" value="${env.KEYSTORE}"/>
+  <property name="alias" value="${env.KEY_ALIAS}"/>
+  <property name="storepass" value="${env.KEYSTORE_PASS}"/>
+  <property name="keypass" value="${env.KEY_PASS}"/>
+
+  <!-- ==== Fixed paths ==== -->
+  <property name="src.dir" value="midlet/src"/>
+  <property name="test.src.dir" value="test/src"/>
+  <property name="build.dir" value="build"/>
+  <property name="classes.dir" value="${build.dir}/classes"/>
+  <property name="preverified.dir" value="${build.dir}/preverified"/>
+  <property name="obfuscated.dir" value="${build.dir}/obfuscated"/>
+  <property name="dist.dir" value="dist"/>
+  <property name="stub.dir" value="stub"/>
+  <property name="lib.dir" value="${wtk.home}/lib"/>
+
+  <!-- MIDP/CLDC bootclasspath (order matters!) -->
+  <path id="bootclasspath">
+    <pathelement location="${lib.dir}/cldcapi11.jar"/>
+    <pathelement location="${lib.dir}/midpapi20.jar"/>
+  </path>
+
+  <!-- Compile classpath: stubs + boot -->
+  <path id="compile.classpath">
+    <pathelement location="${stub.dir}"/>
+    <path refid="bootclasspath"/>
+  </path>
+
+  <!-- ==== Targets ==== -->
+
+  <target name="clean">
+    <delete dir="${build.dir}"/>
+    <delete dir="${dist.dir}"/>
+  </target>
+
+  <target name="prepare" depends="clean">
+    <mkdir dir="${classes.dir}"/>
+    <mkdir dir="${preverified.dir}"/>
+    <mkdir dir="${obfuscated.dir}"/>
+    <mkdir dir="${dist.dir}"/>
+  </target>
+
+  <target name="compile" depends="prepare">
+    <javac
+      srcdir="${src.dir}"
+      destdir="${classes.dir}"
+      source="1.3"
+      target="1.1"
+      encoding="UTF-8"
+      debug="on"
+      deprecation="off"
+      optimize="off"
+      bootclasspathref="bootclasspath"
+      classpathref="compile.classpath"
+      includeantruntime="false"
+    />
+    <!-- Copy non-java resources (none yet) -->
+    <copy todir="${classes.dir}">
+      <fileset dir="${src.dir}" excludes="**/*.java"/>
+    </copy>
+  </target>
+
+  <target name="preverify" depends="compile"
+          description="CLDC preverification (requires WTK preverify tool)">
+    <condition property="preverify.cmd" value="preverify.exe" else="preverify">
+      <os family="windows"/>
+    </condition>
+    <exec executable="${wtk.home}/bin/${preverify.cmd}" failonerror="true">
+      <arg value="-classpath"/>
+      <path path="${lib.dir}/cldcapi11.jar:${lib.dir}/midpapi20.jar"/>
+      <arg value="-d"/>
+      <arg value="${preverified.dir}"/>
+      <arg value="${classes.dir}"/>
+    </exec>
+  </target>
+
+  <target name="obfuscate" depends="preverify"
+          description="ProGuard shrink + optimize + obfuscate">
+    <condition property="proguard.jar" value="${proguard.home}/lib/proguard.jar">
+      <available file="${proguard.home}/lib/proguard.jar"/>
+    </condition>
+    <fail message="Set PROGUARD_HOME or proguard.home property" unless="proguard.jar"/>
+
+    <java jar="${proguard.jar}" fork="true" maxmemory="256m">
+      <arg value="-injars"/>
+      <arg value="${preverified.dir}"/>
+      <arg value="-outjars"/>
+      <arg value="${obfuscated.dir}/chatterbox.jar"/>
+      <arg value="-libraryjars"/>
+      <arg value="${lib.dir}/cldcapi11.jar:${lib.dir}/midpapi20.jar"/>
+      <arg value="-dontskipnonpubliclibraryclasses"/>
+      <arg value="-dontskipnonpubliclibraryclassmembers"/>
+      <arg value="-keepattributes"/>
+      <arg value="SourceFile,LineNumberTable"/>
+      <arg value="-keep"/>
+      <arg value="class com.chatterbox.ui.ChatterboxMIDlet"/>
+      <arg value="-keepclassmembers"/>
+      <arg value="class com.chatterbox.ui.ChatterboxMIDlet { *; }"/>
+      <arg value="-keep"/>
+      <arg value="class * implements javax.microedition.midlet.MIDlet"/>
+      <arg value="-keepclassmembers"/>
+      <arg value="class * implements javax.microedition.midlet.MIDlet { *; }"/>
+      <arg value="-keep"/>
+      <arg value="class com.chatterbox.test.**"/>
+      <arg value="-keepclassmembers"/>
+      <arg value="class com.chatterbox.test.** { *; }"/>
+      <arg value="-keep"/>
+      <arg value="class junit.framework.**"/>
+      <arg value="-dontwarn"/>
+      <arg value="javax.microedition.**"/>
+      <arg value="-optimizationpasses"/>
+      <arg value="5"/>
+      <arg value="-allowaccessmodification"/>
+      <arg value="-repackageclasses"/>
+      <arg value="''"/>
+      <arg value="-overloadaggressively"/>
+      <arg value="-useuniqueclassmembernames"/>
+      <arg value="-flattenpackagehierarchy"/>
+      <arg value="''"/>
+      <arg value="-mergeinterfacesaggressively"/>
+    </java>
+  </target>
+
+  <target name="jar" depends="obfuscate" description="Create final JAR with manifest">
+    <jar destfile="${dist.dir}/chatterbox.jar" basedir="${obfuscated.dir}" compress="true">
+      <manifest>
+        <attribute name="MIDlet-Name" value="Chatterbox"/>
+        <attribute name="MIDlet-Version" value="1.0"/>
+        <attribute name="MIDlet-Vendor" value="Chatterbox Project"/>
+        <attribute name="MIDlet-1" value="Chatterbox,/icon.png,com.chatterbox.ui.ChatterboxMIDlet"/>
+        <attribute name="MicroEdition-Profile" value="MIDP-2.0"/>
+        <attribute name="MicroEdition-Configuration" value="CLDC-1.1"/>
+        <attribute name="MIDlet-Description" value="IRC client for Nokia S60 / Series 40"/>
+        <attribute name="MIDlet-Info-URL" value="https://github.com/yourname/chatterbox"/>
+        <attribute name="MIDlet-Icon" value="/icon.png"/>
+        <attribute name="MIDlet-Permissions" value="javax.microedition.io.Connector.socket,javax.microedition.io.Connector.ssl"/>
+        <attribute name="MIDlet-Permissions-Opt" value="javax.microedition.io.Connector.datagram"/>
+        <attribute name="MIDlet-Data-Size" value="51200"/>
+        <!-- Security: MIDlet-Jar-RSA-SHA1 will be added by jarsigner -->
+      </manifest>
+      <fileset dir="${obfuscated.dir}" includes="chatterbox.jar"/>
+      <zipfileset src="${obfuscated.dir}/chatterbox.jar" includes="**/*.class"/>
+    </jar>
+    <echo message="JAR size: ${toKB:${dist.dir}/chatterbox.jar} KB"/>
+  </target>
+
+  <scriptdef name="toKB" language="javascript">
+    <attribute name="file"/>
+    <![CDATA[
+      var f = project.resolveFile(attributes.get("file"));
+      var kb = Math.round(f.length() / 1024);
+      project.setProperty("jar.size.kb", String.valueOf(kb));
+    ]]>
+  </scriptdef>
+
+  <target name="jad" depends="jar" description="Generate JAD descriptor">
+    <property name="jar.size" value="${jar.size.kb}"/>
+    <property name="jar.url" value="chatterbox.jar"/>
+    <tstamp>
+      <format property="build.time" pattern="yyyy-MM-dd HH:mm"/>
+    </tstamp>
+    <echo file="${dist.dir}/chatterbox.jad">
+MIDlet-Name: Chatterbox
+MIDlet-Version: 1.0
+MIDlet-Vendor: Chatterbox Project
+MIDlet-1: Chatterbox,/icon.png,com.chatterbox.ui.ChatterboxMIDlet
+MIDlet-Jar-URL: ${jar.url}
+MIDlet-Jar-Size: ${jar.size}
+MIDlet-Description: IRC client for Nokia S60 / Series 40
+MIDlet-Info-URL: https://github.com/yourname/chatterbox
+MIDlet-Icon: /icon.png
+MIDlet-Permissions: javax.microedition.io.Connector.socket,javax.microedition.io.Connector.ssl
+MIDlet-Permissions-Opt: javax.microedition.io.Connector.datagram
+MIDlet-Data-Size: 51200
+MicroEdition-Profile: MIDP-2.0
+MicroEdition-Configuration: CLDC-1.1
+Build-Time: ${build.time}
+    </echo>
+  </target>
+
+  <target name="dist" depends="clean,compile,preverify,obfuscate,jar,jad" description="Full release build"/>
+
+  <!-- ==== Tests (desktop JDK only) ==== -->
+  <target name="compile-tests" depends="compile">
+    <mkdir dir="${build.dir}/tests"/>
+    <javac srcdir="${test.src.dir}" destdir="${build.dir}/tests"
+           source="1.8" target="1.8" encoding="UTF-8"
+           classpath="${classes.dir}:${stub.dir}:test/shim"
+           includeantruntime="false"/>
+  </target>
+
+  <target name="test" depends="compile-tests">
+    <java classname="com.chatterbox.test.TestMain"
+          classpath="${classes.dir}:${build.dir}/tests"
+          fork="true" failonerror="true">
+      <jvmarg value="-ea"/>
+    </java>
+  </target>
+
+  <!-- ==== Signing (optional) ==== -->
+  <target name="sign" depends="jar" if="keystore" description="Sign JAR with jarsigner">
+    <signjar jar="${dist.dir}/chatterbox.jar"
+             keystore="${keystore}"
+             alias="${alias}"
+             storepass="${storepass}"
+             keypass="${keypass}"
+             sigalg="SHA256withRSA"
+             digestalg="SHA256"
+             tsalgo="SHA256"/>
+    <echo message="Signed ${dist.dir}/chatterbox.jar"/>
+  </target>
+
+  <target name="sign-check" unless="keystore">
+    <echo message="Skipping sign: set KEYSTORE, KEY_ALIAS, KEYSTORE_PASS, KEY_PASS env vars"/>
+  </target>
+
+  <!-- ==== Emulator install (WTK) ==== -->
+  <target name="install-emu" depends="dist" if="wtk.home">
+    <exec executable="${wtk.home}/bin/emulator" failonerror="false">
+      <arg value="-Xdescriptor:${dist.dir}/chatterbox.jad"/>
+    </exec>
+  </target>
+
+  <target name="install-emu-check" unless="wtk.home">
+    <echo message="Skipping emulator install: set WTK_HOME"/>
+  </target>
+
+</project>
