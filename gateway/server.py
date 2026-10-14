@@ -23,6 +23,7 @@ import signal
 import ssl
 import sys
 import time
+import hmac
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
@@ -191,7 +192,7 @@ class GatewayConnection:
         if not self.config.gateway_password:
             self.logger.error("Gateway password not configured, rejecting %s", self.peer)
             raise PermissionError("Gateway not configured")
-        if password != self.config.gateway_password:
+        if not hmac.compare_digest(password, self.config.gateway_password):
             self.logger.warning("Bad password from %s", self.peer)
             await self.ip_limiter.record_auth_failure(self.ip)
             failures = await self.ip_limiter.get_recent_failures(self.ip)
