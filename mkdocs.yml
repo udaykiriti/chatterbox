@@ -1,0 +1,122 @@
+# MkDocs Configuration for Chatterbox Documentation
+# Install: pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+# Build: mkdocs build
+# Serve: mkdocs serve
+
+site_name: Chatterbox
+site_description: IRC Client for Nokia S60 / Series 40 (MIDP 2.0)
+site_author: Chatterbox Project
+site_url: https://chatterbox.example.com/
+repo_url: https://github.com/your-repo/chatterbox
+repo_name: chatterbox
+edit_uri: edit/main/docs/
+
+copyright: |
+  &copy; 2024 Chatterbox Project — MIT License
+
+# Theme
+theme:
+  name: material
+  language: en
+  palette:
+    - scheme: default
+      primary: teal
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.tabs.link
+    - toc.integrate
+
+# Plugins
+plugins:
+  - search
+  - mermaid2:
+      version: "10.9.0"
+  - git-revision-date-localized:
+      enable_creation_date: true
+      type: date
+      fallback_to_build_date: true
+  - minify:
+      minify_html: true
+
+# Extensions
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - admonition
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+      baselevel: 2
+
+# Navigation
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Building: building.md
+  - Installation: installation.md
+  - Configuration: configuration.md
+  - Gateway Server: gateway.md
+  - Usage & Commands: usage.md
+  - Architecture: architecture.md
+  - Development: development.md
+  - Troubleshooting: troubleshooting.md
+  - Security: security.md
+  - Running Notes: RUNNING.md
+
+# Extra
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/your-repo/chatterbox
+    - icon: fontawesome/brands/discord
+      link: irc://irc.libera.chat/chatterbox
+  analytics:
+    provider: google
+    property: G-XXXXXXXXXX
+  generator: false
+
+# Output
+site_dir: site
+docs_dir: docs
+strict: false
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
