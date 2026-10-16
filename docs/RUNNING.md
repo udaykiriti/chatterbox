@@ -124,7 +124,7 @@ Tests run on the desktop JDK — no WTK or ProGuard needed.
 ant test
 ```
 
-**Expected output:** `197 tests, all green` (or similar count)
+**Expected output:** `229 tests, all green` (or similar count)
 
 Test classes:
 - `ProtocolParserTest` — IRC line parsing, CTCP, numerics
@@ -201,7 +201,7 @@ journalctl -u chatterbox-gateway -f
 | `GATEWAY_IRC_HOST` | `irc.libera.chat` | No | Target IRC server |
 | `GATEWAY_IRC_PORT` | `6697` | No | Target IRC port (TLS) |
 | `GATEWAY_IRC_PASSWORD` | (empty) | No | PASS sent to IRC server |
-| `GATEWAY_RATE_LIMIT` | `10` | No | Messages/sec per connection |
+| `GATEWAY_RATE_LIMIT` | `10` | No | Client→IRC chunks/sec (flood cap; replies not throttled) |
 | `GATEWAY_LOG_LEVEL` | `INFO` | No | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GATEWAY_TLS_VERIFY` | `true` | No | Set `false` for self-signed IRC certs |
 

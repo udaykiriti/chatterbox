@@ -2,6 +2,7 @@ package com.chatterbox.core;
 
 import java.util.Vector;
 
+import com.chatterbox.crypto.E2E;
 import com.chatterbox.proto.Ctcp;
 import com.chatterbox.proto.IrcCodec;
 import com.chatterbox.proto.IrcSanitizer;
@@ -15,11 +16,13 @@ import com.chatterbox.proto.IrcSanitizer;
  *
  * Supported: /join /part /msg /me /nick /topic /quit /query /whois /clear
  *            plus /away /back /names /mode /kick /who /raw /help /close
- *            /server /cycle
+ *            /server /cycle /e2e
  *
  * Assumptions:
  *  - A line that does not start with '/' is sent to the active window; for a
  *    channel that is PRIVMSG <#chan>, for a private window PRIVMSG <nick>.
+ *    With pre-shared-key E2E enabled in Settings, the same paths get an
+ *    encrypted "E2E:1:..." body instead of plaintext.
  *  - Unknown commands get an explicit error rather than being sent to the
  *    server, because a phone keyboard makes typos cheap and silent failure is
  *    the main way users give up on mobile clients.
@@ -181,9 +184,33 @@ public final class CommandProcessor {
         if (cmd.equals("history")) {
             return doHistory(active, rest, r);
         }
+        if (cmd.equals("e2e")) {
+            return doE2e(rest, r);
+        }
 
         r.notice = "Unknown command: /" + cmd;
         r.handled = true;
+        return r;
+    }
+
+    /** Show E2E status. The key itself lives in Settings, never on a wire. */
+    private Result doE2e(String rest, Result r) {
+        r.handled = true;
+        if (rest.equals("on") || rest.equals("off")) {
+            r.notice = "Use Settings > server profile to switch E2E "
+                    + (rest.equals("on") ? "on" : "off") + ".";
+            return r;
+        }
+        boolean ready = server.isE2eReady();
+        boolean active;
+        try {
+            active = session.isE2eActive();
+        } catch (Throwable t) {
+            active = false;
+        }
+        r.notice = ready
+                ? (active ? "E2E is on (messages are encrypted)." : "E2E configured, key not ready.")
+                : "E2E is off. Set an E2E key in Settings and send /e2e again.";
         return r;
     }
 
@@ -193,15 +220,45 @@ public final class CommandProcessor {
             r.notice = "No active conversation. Try /join #channel";
             return;
         }
-        String sanitized = IrcSanitizer.sanitizeMessage(text);
-        sender.send(IrcCodec.privmsg(target, sanitized));
-        // Echo locally: some servers do not echo, and on a slow link the user
-        // needs to see what they typed immediately.
-        Message m = new Message(System.currentTimeMillis(), Message.CHAT,
-                server.getSelfNick(), sanitized, target, true, false);
-        if (active != null) {
-            active.getRing().add(m);
+        if (!sendE2e(target, E2E.KIND_CHAT, text)) {
+            String sanitized = IrcSanitizer.sanitizeMessage(text);
+            sender.send(IrcCodec.privmsg(target, sanitized));
+            // Echo locally: some servers do not echo, and on a slow link the user
+            // needs to see what they typed immediately.
+            Message m = new Message(System.currentTimeMillis(), Message.CHAT,
+                    server.getSelfNick(), sanitized, target, true, false);
+            if (active != null) {
+                active.getRing().add(m);
+            }
         }
+    }
+
+    /**
+     * Encrypt and send one text when pre-shared-key E2E is active; otherwise
+     * a no-op so the caller falls back to plaintext. Prints a local echo
+     * (plaintext) into the window the way the plain path does.
+     * @return true when the message was sent encrypted.
+     */
+    private boolean sendE2e(String target, byte kind, String text) {
+        if (!session.isE2eActive()) {
+            return false;
+        }
+        String clean = IrcSanitizer.sanitizeE2eMessage(text);
+        String[] payloads = session.e2eEncode(target, kind, clean);
+        if (payloads.length == 0) {
+            return false;
+        }
+        for (int i = 0; i < payloads.length; i++) {
+            sender.send(IrcCodec.privmsg(target, payloads[i]));
+        }
+        // Local echo in plaintext, flagged so the user can tell it is E2E.
+        Message m = new Message(System.currentTimeMillis(), kind == E2E.KIND_ACTION ? Message.ACTION : Message.CHAT,
+                server.getSelfNick(), "[E2E] " + clean, target, true, false);
+        ChannelState win = server.window(target);
+        if (win != null) {
+            win.getRing().add(m);
+        }
+        return true;
     }
 
     private Result doMe(ChannelState active, String text, Result r) {
@@ -216,6 +273,9 @@ public final class CommandProcessor {
             return r;
         }
         String sanitized = IrcSanitizer.sanitizeMessage(text);
+        if (sendE2e(target, E2E.KIND_ACTION, text)) {
+            return r;
+        }
         sender.send(IrcCodec.action(target, sanitized));
         Message m = new Message(System.currentTimeMillis(), Message.ACTION,
                 server.getSelfNick(), sanitized, target, true, false);
@@ -236,7 +296,9 @@ public final class CommandProcessor {
             r.notice = "Usage: /msg <nick> <message>";
             return r;
         }
-        sender.send(IrcCodec.privmsg(who, text));
+        if (!sendE2e(who, E2E.KIND_CHAT, text)) {
+            sender.send(IrcCodec.privmsg(who, text));
+        }
         ChannelState w = server.window(who, ChannelState.TYPE_PRIVATE);
         if (w != null) {
             Message m = new Message(System.currentTimeMillis(), Message.CHAT,
@@ -401,7 +463,7 @@ public final class CommandProcessor {
             "/join #ch  /part [#ch]  /msg nick text  /me action  /nick newnick"
             + "  /topic text  /query nick  /whois nick  /who  /names  /mode"
             + "  /kick nick  /away [msg]  /back  /cycle  /clear  /close"
-            + "  /raw line  /help";
+            + "  /raw line  /e2e  /help";
 
     /** CTCP ACTION helper exposed for the UI's "/me" menu item. */
     public static String actionLine(String target, String text) {

@@ -49,7 +49,7 @@ Guide for developers: building, testing, debugging, and contributing to Chatterb
 ### Run All Tests (Desktop)
 ```bash
 ant test
-# Output: 197 tests, 0 failures
+# Output: 229 tests, 0 failures
 ```
 
 ### Run Single Test Class
@@ -285,7 +285,7 @@ Closes #42
 ```
 
 ### PR Checklist
-- [ ] `ant test` passes (197 tests)
+- [ ] `ant test` passes (229 tests)
 - [ ] `ant clean dist` produces JAR < 300 KB
 - [ ] New code has unit tests (if in proto/core)
 - [ ] No new warnings in build output
@@ -317,7 +317,7 @@ ant clean dist
 
 # 4. Verify
 ls -lh dist/chatterbox.jar  # < 300 KB
-ant test                    # 197 pass
+ant test                    # 229 pass
 
 # 5. Tag
 git tag -a v1.2.3 -m "Release 1.2.3"

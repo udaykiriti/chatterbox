@@ -63,3 +63,5 @@ gradlew.bat
 # Documentation builds
 docs/_build/
 docs/.build/
+site/
+mkdocs_build/

@@ -62,10 +62,76 @@ public final class Sasl {
         return "";
     }
 
-    /** Decode base64 server challenge (not used for PLAIN/EXTERNAL). */
+    /**
+     * Decode base64 (RFC 4648). Lenient about missing padding and ignores
+     * whitespace, but the third party feeding us these strings is a hostile
+     * network, so malformed input returns null instead of throwing.
+     */
     public static byte[] decodeBase64(String s) {
-        // Minimal decoder for future SCRAM support. Returns empty for now.
-        return new byte[0];
+        if (s == null) {
+            return null;
+        }
+        // Compact: drop whitespace; '=' only allowed in a trailing pad run.
+        StringBuffer compact = new StringBuffer(s.length());
+        int padChars = 0;
+        boolean padSeen = false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+                continue;
+            }
+            if (c == '=') {
+                if (compact.length() == 0) {
+                    return null;            // leading '='
+                }
+                padSeen = true;
+                padChars++;
+                continue;
+            }
+            if (padSeen) {
+                return null;                // data after padding
+            }
+            compact.append(c);
+        }
+        int body = compact.length();
+        if (body == 0) {
+            return new byte[0];
+        }
+        int rem = body % 4;
+        if (rem == 1) {
+            return null; // impossible grouping
+        }
+        // The pad run length must match the remainder exactly.
+        if (padChars > 0 && padChars != 4 - rem) {
+            return null;
+        }
+        int outLen = body / 4 * 3 + (rem == 0 ? 0 : rem == 2 ? 1 : 2);
+        byte[] out = new byte[outLen];
+        int acc = 0;
+        int nbits = 0;
+        int pos = 0;
+        for (int i = 0; i < body; i++) {
+            int v = valueOf(compact.charAt(i));
+            if (v < 0) {
+                return null;
+            }
+            acc = (acc << 6) | v;
+            nbits += 6;
+            if (nbits >= 8) {
+                nbits -= 8;
+                out[pos++] = (byte) ((acc >>> nbits) & 0xFF);
+            }
+        }
+        return out;
+    }
+
+    private static int valueOf(char c) {
+        if (c >= 'A' && c <= 'Z') return c - 'A';
+        if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+        if (c >= '0' && c <= '9') return c - '0' + 52;
+        if (c == '+') return 62;
+        if (c == '/') return 63;
+        return -1;
     }
 
     /** Check if mechanism is supported by this client. */

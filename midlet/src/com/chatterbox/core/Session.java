@@ -14,6 +14,7 @@ import com.chatterbox.core.MessageHistory;
 import com.chatterbox.core.WhoisCache;
 import com.chatterbox.core.AutoAway;
 import com.chatterbox.proto.Cap;
+import com.chatterbox.crypto.E2E;
 
 /**
  * Protocol state machine for one server: consumes parsed {@link IrcLine}s,
@@ -58,6 +59,12 @@ public final class Session {
     private MessageHistory messageHistory;
     private boolean capsDone;
     private String[] ackedCaps = new String[0];
+
+    // Pre-shared-key E2E cache. Rebuilt lazily when the configured
+    // passphrase changes; cleared when the passphrase is removed.
+    private E2E e2eCipher;
+    private String e2eKeySeed;
+    private byte[] e2eKeyBytes;
 
     public Session(ServerState server, Sender sender) {
         this.server = server;
@@ -113,6 +120,10 @@ public final class Session {
         });
         capsDone = false;
         ackedCaps = new String[0];
+        // E2E cache from the previous incarnation must not leak into this one.
+        e2eKeySeed = null;
+        e2eKeyBytes = null;
+        e2eCipher = null;
     }
 
     // ------------------------------------------------------------------
@@ -330,8 +341,64 @@ public final class Session {
             return;
         }
 
+        // E2E payload: decrypt before anything else touches the text.
+        if (E2E.isE2e(text)) {
+            byte[] key = e2eKey();
+            if (key == null) {
+                deliver(in, target, from,
+                        "[E2E] encrypted message (no key set - see Settings)", kind, notice, isSelf);
+                return;
+            }
+            E2E.Plain p = E2E.decode(key, from, target, text);
+            if (p == null) {
+                deliver(in, target, from,
+                        "[E2E] encrypted message could not be decrypted", kind, notice, isSelf);
+                return;
+            }
+            deliver(in, target, from, p.text,
+                    p.kind == E2E.KIND_ACTION ? Message.ACTION : kind, notice, isSelf);
+            return;
+        }
+
         // A notice addressed to us is personal; to a channel it is a window msg.
         deliver(in, target, from, text, kind, notice, isSelf);
+    }
+
+    // ------------------------------------------------------------------
+    // Prep-shared-key (PSK) E2E encryption
+    // ------------------------------------------------------------------
+
+    /** Traffic key for E2E, or null when no passphrase is configured. */
+    private synchronized byte[] e2eKey() {
+        String k = server.getE2eKey();
+        if (k == null || k.length() == 0) {
+            e2eKeyBytes = null;
+            e2eCipher = null;
+            e2eKeySeed = null;
+            return null;
+        }
+        if (!k.equals(e2eKeySeed)) {
+            e2eKeyBytes = E2E.deriveKey(k);
+            e2eCipher = new E2E(k, server.getSelfNick());
+            e2eKeySeed = k;
+        }
+        return e2eKeyBytes;
+    }
+
+    /** True when outgoing text should be encrypted. */
+    public synchronized boolean isE2eActive() {
+        return server.isE2eReady() && e2eKey() != null;
+    }
+
+    /**
+     * Encrypt one outbound text for a target. Returns the PRIVMSG trailing
+     * payload(s) to send; empty when E2E is off.
+     */
+    public synchronized String[] e2eEncode(String target, byte kind, String text) {
+        if (!server.isE2eReady() || e2eKey() == null || e2eCipher == null) {
+            return new String[0];
+        }
+        return e2eCipher.encode(target, kind, text);
     }
 
     private void deliver(IrcLine in, String target, String from, String text,

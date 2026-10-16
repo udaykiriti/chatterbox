@@ -25,6 +25,8 @@ public final class Profile {
     private String realName = "";
     private String channels = "";
     private boolean enabled = true;
+    private boolean e2eOn;
+    private String e2eKey = "";
 
     public Profile() {
     }
@@ -122,6 +124,24 @@ public final class Profile {
         this.enabled = e;
     }
 
+    /** Pre-shared-key end-to-end encryption for this profile. */
+    public boolean isE2eOn() {
+        return e2eOn;
+    }
+
+    public void setE2eOn(boolean on) {
+        this.e2eOn = on;
+    }
+
+    /** E2E passphrase; shared out-of-band with every chat partner. */
+    public String getE2eKey() {
+        return e2eKey;
+    }
+
+    public void setE2eKey(String k) {
+        this.e2eKey = k == null ? "" : k;
+    }
+
     /** Stable key for the connection, also used in thread names. */
     public String serverId() {
         return host + ":" + port;
@@ -176,6 +196,9 @@ public final class Profile {
         RmsStore.writeString(out, realName);
         RmsStore.writeString(out, channels);
         out.writeBoolean(enabled);
+        // E2E settings (appended in v1.3; decode tolerates records without them)
+        RmsStore.writeString(out, PasswordObfuscator.obfuscate(e2eKey));
+        out.writeBoolean(e2eOn);
     }
 
     /**
@@ -198,6 +221,13 @@ public final class Profile {
                 p.enabled = in.readBoolean();
             } catch (IOException eof) {
                 p.enabled = true; // older record without the field
+            }
+            try {
+                p.e2eKey = PasswordObfuscator.deobfuscate(RmsStore.readString(in));
+                p.e2eOn = in.readBoolean();
+            } catch (IOException eof) {
+                p.e2eKey = ""; // older record without E2E fields
+                p.e2eOn = false;
             }
             if (p.host.length() == 0) {
                 return null;

@@ -13,7 +13,9 @@ Protocol:
   Gateway -> IRC:     TLS connection to configured host:port
   Then:               byte-for-byte relay in both directions
 
-Rate limiting: 10 messages/second per connection, 50 connections/IP/minute.
+Rate limiting: 10 chunks/second outbound per connection (client -> IRC only,
+    to stop a compromised phone from flooding the network); the gateway-to-client
+    direction is never throttled. 10 concurrent connections per IP.
 """
 
 import asyncio
@@ -39,7 +41,7 @@ class Config:
     irc_password: Optional[str] = None  # PASS sent to IRC server after CONNECT
     gateway_password: str = ""  # Required first line from client (MUST be set via env)
     max_connections: int = 100
-    rate_limit_per_sec: int = 10
+    rate_limit_per_sec: int = 10  # client -> IRC chunks/second; irc -> client unthrottled
     max_connections_per_ip: int = 10
     auth_timeout: float = 5.0
     connect_timeout: float = 15.0
@@ -74,6 +76,11 @@ def load_config() -> Config:
         min_password_length=int(os.getenv("GATEWAY_MIN_PASSWORD_LEN", "16")),
     )
     # Config.__post_init__ validates gateway_password
+    if cfg.rate_limit_per_sec <= 0:
+        # A zero/negative rate would make the client->IRC pump wait for a
+        # token forever, so treat it as "unlimited" instead of a stall.
+        cfg.rate_limit_per_sec = 0
+        logging.warning("GATEWAY_RATE_LIMIT <= 0: no outbound flood cap")
     if not cfg.tls_verify:
         logging.warning("SECURITY WARNING: TLS verification is DISABLED. This is insecure!")
     return cfg
@@ -188,11 +195,16 @@ class GatewayConnection:
             raise
         if not line:
             raise ConnectionError("Client closed before auth")
-        password = line.decode("utf-8", errors="replace").strip()
+        # Compare raw bytes: compare_digest() raises TypeError on non-ASCII
+        # str args, so decode would either break real UTF-8 passwords or force
+        # an errors=replace normalization that mangles the secret. bytes are
+        # constant-time and always well-defined.
+        provided = line.strip()
+        expected = self.config.gateway_password.encode("utf-8")
         if not self.config.gateway_password:
             self.logger.error("Gateway password not configured, rejecting %s", self.peer)
             raise PermissionError("Gateway not configured")
-        if not hmac.compare_digest(password, self.config.gateway_password):
+        if not hmac.compare_digest(provided, expected):
             self.logger.warning("Bad password from %s", self.peer)
             await self.ip_limiter.record_auth_failure(self.ip)
             failures = await self.ip_limiter.get_recent_failures(self.ip)
@@ -229,16 +241,23 @@ class GatewayConnection:
         self.logger.info("IRC connection established")
 
     async def relay(self):
-        async def pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter, name: str):
+        async def pump(src: asyncio.StreamReader, dst: asyncio.StreamWriter,
+                       name: str, rate_limited: bool):
             try:
                 while True:
                     data = await src.read(8192)
                     if not data:
                         self.logger.debug("%s: EOF", name)
                         break
-                    if not self.rate_limiter.take():
-                        await asyncio.sleep(0.1)
-                        continue
+                    if rate_limited and self.config.rate_limit_per_sec > 0:
+                        # Outbound flood protection only (client -> IRC). Wait
+                        # for a token BEFORE moving on: the chunk we just read
+                        # is never dropped, and because we do not read the next
+                        # one until this is written, in-flight data stays
+                        # bounded to ~8 KiB while the sender gets TCP
+                        # backpressure.
+                        while not self.rate_limiter.take():
+                            await asyncio.sleep(0.05)
                     dst.write(data)
                     await dst.drain()
                     self.last_activity = time.monotonic()
@@ -259,8 +278,8 @@ class GatewayConnection:
                     break
 
         await asyncio.gather(
-            pump(self.reader, self.irc_writer, "client->irc"),
-            pump(self.irc_reader, self.writer, "irc->client"),
+            pump(self.reader, self.irc_writer, "client->irc", rate_limited=True),
+            pump(self.irc_reader, self.writer, "irc->client", rate_limited=False),
             watchdog(),
             return_exceptions=True
         )

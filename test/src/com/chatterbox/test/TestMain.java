@@ -19,7 +19,8 @@ public final class TestMain {
         SessionTest.class,
         CryptoTest.class,
         X25519Test.class,
-        SecurityTest.class
+        SecurityTest.class,
+        E2ETest.class
     };
 
     public static void main(String[] args) {

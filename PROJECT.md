@@ -1,6 +1,6 @@
 # Chatterbox — MIDP 2.0 IRC Client with E2E Encryption
 
-**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with Signal-style end-to-end encryption, TLS gateway fallback, and 197 passing unit tests.**
+**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 229 passing unit tests.**
 
 ---
 
@@ -11,7 +11,7 @@ chatterbox/
 ├── midlet/src/com/chatterbox/
 │   ├── proto/      # Protocol layer (zero UI deps) — IrcParser, IrcCodec, LineReader, Ctcp, Cap, Sasl, Dcc, Format, IrcSanitizer
 │   ├── core/       # Session state, commands, crypto integration — Session, SessionManager, ChannelState, MessageRing, CommandProcessor, IgnoreList, HighlightRules, ServiceIdentify, AutoAway, WhoisCache, MessageHistory
-│   ├── crypto/     # E2E primitives — Curve25519, ChaCha20, Poly1305, ChaCha20Poly1305, HKDF, SHA256, DoubleRatchet
+│   ├── crypto/     # E2E primitives — E2E (pre-shared-key codec), ChaCha20, Poly1305, ChaCha20Poly1305, HKDF, SHA256, Curve25519 & DoubleRatchet (roadmap)
 │   ├── net/        # Network — IrcConnection, SocketFactory, FloodQueue, ConnectionConfig
 │   ├── rms/        # Persistence — ProfileStore, Profile, LogStore, RmsStore, PasswordObfuscator
 │   └── ui/         # LCDUI screens — ChatterboxMIDlet, ChatCanvas, ChatView, ServerListScreen, SettingsScreen, NickListScreen, ChannelListScreen, QuickConnect, LogViewer, Notifier, InputLine, NickComplete, ServiceScreen, HighlightScreen, IgnoreScreen, UrlHandler
@@ -19,7 +19,7 @@ chatterbox/
 │   ├── server.py   # Asyncio TLS relay with password auth, rate limiting
 │   ├── Dockerfile  # Container build
 │   └── deploy/     # systemd unit
-├── test/           # 197 unit tests (JUnit 3 shim, no external deps)
+├── test/           # 229 unit tests (JUnit 3 shim, no external deps)
 │   ├── shim/       # Minimal JUnit 3 clone
 │   └── src/
 ├── build.xml       # Ant: compile → preverify → ProGuard → JAR/JAD
@@ -91,16 +91,17 @@ javac -encoding UTF-8 -cp build/classes -d build/tests $(find test/shim test/src
 java -cp build/classes:build/tests com.chatterbox.test.TestMain
 ```
 
-**Expected:** `✔ 197 tests, all green`
+**Expected:** `✔ 229 tests, all green`
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
-| ProtocolParserTest | 35 | IRC line parsing, CTCP, numerics |
-| CoreTest | 30 | Str, IrcCase, MessageRing, FloodQueue, ChannelState |
-| SessionTest | 81 | Full protocol flow, commands, ratchet, auto-away, service identify |
-| CryptoTest | 18 | HKDF, HMAC-SHA256, SHA256 |
+| ProtocolParserTest | 32 | IRC line parsing, CTCP, numerics |
+| CoreTest | 31 | Str, IrcCase, MessageRing, FloodQueue, ChannelState |
+| SessionTest | 83 | Full protocol flow, commands, auto-away, service identify |
+| CryptoTest | 21 | HKDF, HMAC-SHA256, SHA256, RFC 8439 vectors (ChaCha20, Poly1305, AEAD) |
 | X25519Test | 9 | RFC 7748 vectors, DH, non-canonical input handling |
-| SecurityTest | 24 | IrcSanitizer, PasswordObfuscator |
+| SecurityTest | 29 | IrcSanitizer, PasswordObfuscator |
+| E2ETest | 24 | Pre-shared-key E2E codec, session + command integration |
 
 ---
 
@@ -212,23 +213,28 @@ sudo systemctl enable --now chatterbox-gateway
 
 ---
 
-## [E] End-to-End Encryption
+## [E] End-to-End Encryption (pre-shared-key)
 
 | Primitive | Implementation |
 |-----------|----------------|
-| **Key Exchange** | Curve25519 (RFC 7748) |
-| **Cipher** | ChaCha20-Poly1305 (RFC 8439) |
-| **Ratchet** | Signal Double Ratchet (forward + future secrecy) |
-| **Key Derivation** | HKDF-SHA256 (RFC 5869) |
+| **Key Establishment** | Shared passphrase per profile → HKDF-SHA256 (RFC 5869) → 256-bit key |
+| **Cipher** | ChaCha20-Poly1305 (RFC 8439), 128-bit AEAD tag |
+| **Nonce** | SHA-256(key‖nick‖counter)[0..12]; counter seeded from epoch seconds, monotonic |
+| **AAD Binding** | `cb-e2e-v1\|<sender>\|<target>` — stops cross-channel reuse of payloads |
+| **Wire Format** | `E2E:1:<base64(nonce ‖ ciphertext ‖ tag)>` in a normal PRIVMSG |
 | **Hash** | SHA-256 (FIPS 180-4) |
 | **SASL** | PLAIN / EXTERNAL |
 
 **Flow:**
-1. X3DH-style initial handshake (shared secret + DH ratchet keys)
-2. Double Ratchet: each message advances symmetric ratchet
-3. DH ratchet on new peer key → new root key + chain keys
-4. Forward secrecy: compromise of current keys ≠ past messages
-5. Future secrecy: compromise heals on next DH ratchet
+1. Both parties set the same passphrase in Settings — the key never crosses the wire
+2. Sending: HKDF-derived key encrypts each message; payload rides a regular PRIVMSG
+3. Long texts are split into chunks with visible `[i/n]` prefixes
+4. Receiving: decrypt using the sender nick from the IRC prefix; no key or a bad
+   tag renders a placeholder instead of crashing
+5. Malformed payloads (`E2E:` junk, bad base64) are rejected cleanly
+
+**Roadmap (library code present, not wired):** X3DH-style handshake over
+Curve25519 (RFC 7748) and a Signal Double Ratchet for forward/future secrecy.
 
 ---
 
@@ -241,7 +247,7 @@ sudo systemctl enable --now chatterbox-gateway
 | **TLS** | `ssl://` first, falls back to gateway plain TCP |
 | **Certificate Pinning** | Not implemented (CLDC 1.1 limitation) |
 | **Message Auth** | ChaCha20-Poly1305 AEAD (128-bit tag) |
-| **Replay Protection** | Double Ratchet message numbers + skipped key cache |
+| **Replay Protection** | AEAD tag + AAD bound to sender/target; ratchet-based replay cache is roadmap |
 
 ---
 

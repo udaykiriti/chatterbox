@@ -183,7 +183,7 @@ All config via environment variables:
 | `GATEWAY_IRC_HOST` | No | `irc.libera.chat` | Target IRC server hostname |
 | `GATEWAY_IRC_PORT` | No | `6697` | Target IRC port (usually 6697 TLS) |
 | `GATEWAY_IRC_PASSWORD` | No | *(empty)* | PASS sent to IRC server (if needed) |
-| `GATEWAY_RATE_LIMIT` | No | `10` | Max messages/second per connection |
+| `GATEWAY_RATE_LIMIT` | No | `10` | Max client→IRC chunks/second (outbound flood cap; replies are not throttled) |
 | `GATEWAY_LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GATEWAY_TLS_VERIFY` | No | `true` | Set `false` for self-signed IRC certs |
 | `GATEWAY_IDLE_TIMEOUT` | No | `300` | Seconds before closing idle connection |
@@ -249,9 +249,13 @@ ignoreregex =
 - **Self-signed IRC:** `GATEWAY_TLS_VERIFY=false` — skip verification (not recommended)
 
 ### Rate Limiting
-- Default: 10 messages/second per connection
-- Burst: ~20 messages allowed before throttle
-- Excess: Dropped silently, connection not closed
+- Direction: **client → IRC only** (flood protection against a compromised phone)
+- Default: 10 chunks/second per connection
+- Burst: ~20 chunks allowed before throttling
+- **No data loss:** instead of dropping, the relay waits for a token — at most
+  ~8 KiB sits in flight and the client is slowed by TCP backpressure
+- The gateway → client direction is never throttled
+- `GATEWAY_RATE_LIMIT=0` disables the cap entirely
 - Adjust: `GATEWAY_RATE_LIMIT=20` for busier channels
 
 ---
@@ -272,12 +276,13 @@ sudo journalctl -u chatterbox-gateway -b
 
 ### Log Format
 ```
-2024-01-15 10:30:45,123 INFO     Gateway listening on 0.0.0.0:6667
-2024-01-15 10:30:50,456 INFO     Client connected: 203.0.113.42:54321
-2024-01-15 10:30:50,789 INFO     TLS established to irc.libera.chat:6697
-2024-01-15 10:30:51,012 INFO     Relay started for 203.0.113.42:54321
-2024-01-15 10:35:22,345 WARNING  Rate limit exceeded for 203.0.113.42:54321
-2024-01-15 10:40:00,000 INFO     Idle timeout, closing 203.0.113.42:54321
+10:30:45 INFO     Gateway listening on ('0.0.0.0', 6667)
+10:30:45 INFO     Relaying to irc.libera.chat:6697 (TLS)
+10:30:46 INFO     Max connections: 100, max per IP: 10, rate limit: 10 msg/s
+10:30:50 INFO     New connection from ('203.0.113.42', 54321)
+10:30:50 INFO     Authenticated ('203.0.113.42', 54321)
+10:30:51 INFO     IRC connection established
+10:40:00 INFO     Idle timeout for ('203.0.113.42', 54321)
 ```
 
 ### Health Check Endpoint (Optional)
@@ -339,11 +344,12 @@ GATEWAY_TLS_VERIFY=false
 
 ### Rate Limiting Too Aggressive
 ```bash
-# Increase limit
+# Increase limit (client -> IRC chunks per second)
 GATEWAY_RATE_LIMIT=20
 # Or disable (not recommended)
 GATEWAY_RATE_LIMIT=0
 ```
+Note: throttling slows the sender (TCP backpressure); it never drops messages.
 
 ### Connection Drops Frequently
 - Check `GATEWAY_IDLE_TIMEOUT` (default 300s = 5 min)

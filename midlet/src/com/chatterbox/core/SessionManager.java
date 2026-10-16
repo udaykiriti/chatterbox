@@ -87,6 +87,8 @@ public final class SessionManager implements IrcEventListener {
         s.setPassword(p.getPassword());
         s.setRealName(p.getRealName());
         s.setChannelList(p.getChannels());
+        s.setE2eOn(p.isE2eOn());
+        s.setE2eKey(p.getE2eKey());
         IrcConnection c = new IrcConnection(s, config);
         c.getSession().setAutoJoin(p.getChannels());
         add(c);

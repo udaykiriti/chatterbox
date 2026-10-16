@@ -30,6 +30,8 @@ public final class ServerState {
     private String password = "";
     private String realName = "";
     private String channels = "";    // comma separated, for the settings form
+    private boolean e2eOn;           // pre-shared-key E2E toggle
+    private String e2eKey = "";      // E2E passphrase (empty = E2E off)
 
     private String selfNick = "";
     private String selfUser = "";
@@ -106,6 +108,28 @@ public final class ServerState {
 
     public void setChannelList(String c) {
         this.channels = c == null ? "" : c;
+    }
+
+    /** Pre-shared-key end-to-end encryption on/off. */
+    public boolean isE2eOn() {
+        return e2eOn;
+    }
+
+    public void setE2eOn(boolean on) {
+        this.e2eOn = on;
+    }
+
+    public String getE2eKey() {
+        return e2eKey;
+    }
+
+    public void setE2eKey(String k) {
+        this.e2eKey = k == null ? "" : k;
+    }
+
+    /** Both a key and the toggle are needed before anything is encrypted. */
+    public boolean isE2eReady() {
+        return e2eOn && e2eKey.length() > 0;
     }
 
     public String getSelfNick() {

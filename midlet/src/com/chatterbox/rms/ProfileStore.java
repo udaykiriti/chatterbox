@@ -385,7 +385,12 @@ public final class ProfileStore {
             sb.append(escape(p.getPassword())); sb.append('|');
             sb.append(escape(p.getRealName())); sb.append('|');
             sb.append(escape(p.getChannels())); sb.append('|');
-            sb.append(p.isEnabled() ? "1" : "0"); sb.append('\n');
+            sb.append(p.isEnabled() ? "1" : "0"); sb.append('|');
+            // v1.3: E2E settings appended. Older imports only read the first
+            // ten cells and ignore these two; v1.3+ imports tolerate profiles
+            // exported from older builds (parts.length check below).
+            sb.append(p.isE2eOn() ? "1" : "0"); sb.append('|');
+            sb.append(escape(p.getE2eKey())); sb.append('\n');
         }
         return com.chatterbox.proto.Utf8.encode(sb.toString());
     }
@@ -466,6 +471,11 @@ public final class ProfileStore {
                 p.setRealName(unescape(parts[7]));
                 p.setChannels(unescape(parts[8]));
                 p.setEnabled("1".equals(parts[9]));
+                if (parts.length >= 12) {
+                    // v1.3 added e2eOn | e2eKey after the enabled cell.
+                    p.setE2eOn("1".equals(parts[10]));
+                    p.setE2eKey(unescape(parts[11]));
+                }
                 if (p.validate().length() == 0) {
                     into.addElement(p);
                     count++;

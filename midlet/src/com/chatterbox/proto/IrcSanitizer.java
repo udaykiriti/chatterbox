@@ -172,6 +172,28 @@ public final class IrcSanitizer {
     }
 
     /**
+     * Text meant for E2E plaintext bodies: unlike {@link #sanitizeMessage}
+     * this keeps non-ASCII characters (the enciphered text travels as base64,
+     * so UTF-8 is safe), but still strips CRLF, DEL and control characters.
+     * Length is limited by the E2E chunker, not here.
+     */
+    public static String sanitizeE2eMessage(String input) {
+        if (input == null) {
+            return "";
+        }
+        StringBuffer sb = new StringBuffer(input.length());
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (c == '\r' || c == '\n') {
+                sb.append(' ');
+            } else if (c >= 0x20 && c != 0x7F) {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * Sanitize a CTCP message body.
      * CTCP uses DEL (0x01) as delimiter, so strip it.
      */

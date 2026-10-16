@@ -70,6 +70,8 @@ public final class SettingsScreen extends Form implements CommandListener {
     private TextField fPass;
     private TextField fReal;
     private TextField fChannels;
+    private javax.microedition.lcdui.ChoiceGroup fE2e;
+    private TextField fE2eKey;
 
     private final Command saveCmd = new Command("Save", Command.OK, 1);
     private final Command cancelCmd = new Command("Cancel", Command.BACK, 2);
@@ -171,6 +173,13 @@ public final class SettingsScreen extends Form implements CommandListener {
 
         fChannels = new TextField("Channels", "", 200, TextField.ANY);
         append("Join on connect (comma separated, optional key after a space)", fChannels);
+
+        fE2e = new javax.microedition.lcdui.ChoiceGroup("E2E mode",
+                new String[] { "off", "on (encrypt)" }, 0,
+                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
+        fE2eKey = new TextField("E2E key (shared secret)", "",
+                128, TextField.PASSWORD);
+        append("End-to-end encryption", new Item[] { fE2e, fE2eKey });
         fillProfileForm();
     }
 
@@ -187,6 +196,8 @@ public final class SettingsScreen extends Form implements CommandListener {
         fPass.setString(editing.getPassword());
         fReal.setString(editing.getRealName());
         fChannels.setString(editing.getChannels());
+        fE2e.setSelectedIndex(editing.isE2eOn() ? 1 : 0, false);
+        fE2eKey.setString(editing.getE2eKey());
     }
 
     // ------------------------------------------------------------------
@@ -266,6 +277,8 @@ public final class SettingsScreen extends Form implements CommandListener {
         editing.setPassword(fPass.getString());
         editing.setRealName(fReal.getString());
         editing.setChannels(fChannels.getString());
+        editing.setE2eOn(fE2e.getSelectedIndex() == 1);
+        editing.setE2eKey(fE2eKey.getString());
 
         String err = editing.validate();
         if (err.length() > 0) {

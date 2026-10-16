@@ -11,6 +11,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
 ### Added
 - Comprehensive documentation in `docs/` (12 guides)
 - MkDocs site configuration for static documentation site
+- Pre-shared-key end-to-end encryption: per-profile passphrase → HKDF-SHA256 →
+  ChaCha20-Poly1305 (RFC 8439); wire format `E2E:1:<base64(nonce ‖ ct ‖ tag)>`,
+  nonce derived from SHA-256(key‖nick‖counter), AAD bound to sender + target,
+  long texts auto-chunked; Settings toggle and `/e2e` status command
+- `E2ETest` suite (24 tests): codec, session + command integration
+- RFC 8439 test vectors in `CryptoTest` (ChaCha20 §2.3.2/§2.4.2, Poly1305
+  §2.5.2/§2.5.2 A.3, AEAD §2.8.2 encrypt/decrypt/tamper/wrong-AAD)
+- Strict base64 decoder in `Sasl` (whitespace-tolerant, padded/unpadded input)
+
+### Fixed
+- **Poly1305 rewritten** (donna-32 style): the RFC 8439 vectors exposed broken
+  limb loading, an over-permissive top-limb clamp mask (0x00ffffff → 0x000fffff),
+  a tail-block pad bit written to the wrong position, and missing inter-word
+  carries when adding `s`; the MAC now reproduces every RFC vector byte-exactly
+- Gateway relay no longer drops the chunk being relayed when the rate limit is
+  exhausted — it waits for a token instead (data preserved, ~8 KiB in flight,
+  TCP backpressure on the sender); throttling now applies only to the
+  client → IRC direction, gateway → client is unthrottled
+- Gateway password comparison: `hmac.compare_digest` on UTF-8 bytes (non-ASCII
+  passwords previously raised `TypeError` on str input)
+- `GATEWAY_RATE_LIMIT=0` disables the flood cap instead of stalling the relay
+- Documentation test counts corrected everywhere (README badge, guides, changelog):
+  229 tests passing
 
 ---
 
