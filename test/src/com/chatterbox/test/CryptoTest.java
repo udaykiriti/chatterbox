@@ -7,8 +7,8 @@ import junit.framework.TestCase;
 
 /**
  * Crypto layer tests for working primitives only.
- * Curve25519, ChaCha20, Poly1305, ChaCha20-Poly1305, DoubleRatchet have known issues
- * and are tested separately when fixed.
+ * Curve25519 is covered by X25519Test. ChaCha20, Poly1305, ChaCha20-Poly1305 and
+ * DoubleRatchet have known issues and are tested separately when fixed.
  */
 public final class CryptoTest extends TestCase {
 

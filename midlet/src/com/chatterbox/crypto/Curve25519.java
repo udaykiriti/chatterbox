@@ -1,54 +1,267 @@
 package com.chatterbox.crypto;
 
+/**
+ * X25519 scalar multiplication (RFC 7748) for CLDC 1.1 / MIDP 2.0.
+ *
+ * <p>Field elements are held as 16 little-endian 16-bit limbs in int[16] and are
+ * kept fully reduced modulo p = 2^255 - 19 after every operation. This avoids
+ * java.math.BigInteger, which is not part of CLDC.
+ *
+ * <p>Byte arrays are little-endian, matching RFC 7748. The most significant
+ * bit of the input u-coordinate is masked, and non-canonical u values
+ * (>= p) are accepted and reduced, as the RFC requires.
+ */
 public final class Curve25519 {
+
     public static final int SCALAR_BYTES = 32;
     public static final int POINT_BYTES = 32;
 
+    /** (486662 - 2) / 4, the a24 constant of the Montgomery ladder. */
+    private static final int[] A24 = constant(121665);
+
     private Curve25519() {}
 
+    /** Computes X25519(k, u): scalar multiplication on the Montgomery u-line. */
     public static byte[] scalarMult(byte[] k, byte[] u) {
         if (k == null || k.length != SCALAR_BYTES) throw new IllegalArgumentException("Scalar must be 32 bytes");
         if (u == null || u.length != POINT_BYTES) throw new IllegalArgumentException("Point must be 32 bytes");
-        byte[] scalar = k.clone(); clampScalar(scalar);
-        byte[] x1 = u.clone(); byte[] x2 = new byte[32]; x2[0] = 1; byte[] z2 = new byte[32]; byte[] x3 = u.clone(); byte[] z3 = new byte[32]; z3[0] = 1; byte[] scalarCopy = scalar;
-        for (int i = 255; i >= 0; i--) {
-            int bit = (scalarCopy[i >> 3] >> (i & 7)) & 1;
-            if (bit == 1) { cswap(x2, x3); cswap(z2, z3); }
-            ladderStep(x1, x2, z2, x3, z3);
-            if (bit == 1) { cswap(x2, x3); cswap(z2, z3); }
+
+        byte[] scalar = new byte[32];
+        System.arraycopy(k, 0, scalar, 0, 32);
+        clampScalar(scalar);
+
+        int[] x1 = toLimbs(u);
+        int[] x2 = new int[16]; x2[0] = 1;
+        int[] z2 = new int[16];
+        int[] x3 = toLimbs(u);
+        int[] z3 = new int[16]; z3[0] = 1;
+
+        int swap = 0;
+        for (int t = 254; t >= 0; t--) {
+            int kt = (scalar[t >> 3] >> (t & 7)) & 1;
+            swap ^= kt;
+            cswap(swap, x2, x3);
+            cswap(swap, z2, z3);
+            swap = kt;
+
+            int[] A = add(x2, z2);
+            int[] AA = sqr(A);
+            int[] B = sub(x2, z2);
+            int[] BB = sqr(B);
+            int[] E = sub(AA, BB);
+            int[] C = add(x3, z3);
+            int[] D = sub(x3, z3);
+            int[] DA = mul(D, A);
+            int[] CB = mul(C, B);
+            x3 = sqr(add(DA, CB));
+            z3 = mul(x1, sqr(sub(DA, CB)));
+            x2 = mul(AA, BB);
+            z2 = mul(E, add(AA, mul(E, A24)));
         }
-        byte[] z2inv = invert(z2); return mul(x2, z2inv);
+        cswap(swap, x2, x3);
+        cswap(swap, z2, z3);
+        return fromLimbs(mul(x2, invert(z2)));
     }
-    public static byte[] generatePrivateKey() { byte[] key = new byte[32]; java.security.SecureRandom rand = new java.security.SecureRandom(); rand.nextBytes(key); clampScalar(key); return key; }
-    public static byte[] derivePublicKey(byte[] privateKey) { byte[] basePoint = new byte[32]; basePoint[0] = 9; return scalarMult(privateKey, basePoint); }
-    public static byte[] keyAgreement(byte[] myPrivateKey, byte[] theirPublicKey) { return scalarMult(myPrivateKey, theirPublicKey); }
-    private static void clampScalar(byte[] k) { k[0] &= 0xF8; k[31] &= 0x7F; k[31] |= 0x40; }
-    private static void cswap(byte[] a, byte[] b) { for (int i = 0; i < 32; i++) { byte t = a[i]; a[i] = b[i]; b[i] = t; } }
-    private static void ladderStep(byte[] x1, byte[] x2, byte[] z2, byte[] x3, byte[] z3) {
-        byte[] A = add(x2, z2); byte[] AA = sqr(A); byte[] B = sub(x2, z2); byte[] BB = sqr(B); byte[] E1 = sub(AA, BB);
-        byte[] C = add(x3, z3); byte[] D = sub(x3, z3); byte[] DA = mul(D, A); byte[] CB = mul(C, B);
-        byte[] x3_new = sqr(add(mul(D, A), mul(C, B))); byte[] z3_new = sqr(sub(mul(D, A), mul(C, B))); mul(x1, z3_new, z3);
-        byte[] x2_new = mul(AA, BB); byte[] E = sub(AA, BB); mulSmall(E, 121666); byte[] z2_new = mul(E, add(AA, mul(E, BB)));
-        System.arraycopy(x3_new, 0, x3, 0, 32); System.arraycopy(z3_new, 0, z3, 0, 32); System.arraycopy(x2_new, 0, x2, 0, 32); System.arraycopy(z2_new, 0, z2, 0, 32);
+
+    /**
+     * Generates a random private scalar. CLDC 1.1 provides no crypto-strength
+     * RNG, so this seeds java.util.Random from the clock and object identity;
+     * prefer importing keys generated on a stronger source when possible.
+     */
+    public static byte[] generatePrivateKey() {
+        byte[] key = new byte[32];
+        java.util.Random rng = new java.util.Random(
+                System.currentTimeMillis() ^ (((long) new Object().hashCode()) << 20));
+        for (int i = 0; i < 32; i++) key[i] = (byte) rng.nextInt();
+        clampScalar(key);
+        return key;
     }
-    private static byte[] add(byte[] a, byte[] b) { byte[] out = new byte[32]; int carry = 0; for (int i = 0; i < 32; i++) { int sum = (a[i] & 0xFF) + (b[i] & 0xFF) + (carry & 0xFF); out[i] = (byte)(sum & 0xFF); carry = sum >> 8; } return out; }
-    private static byte[] sub(byte[] a, byte[] b) { byte[] out = new byte[32]; int borrow = 0; for (int i = 0; i < 32; i++) { int diff = (a[i] & 0xFF) - (b[i] & 0xFF) - borrow; if (diff < 0) { diff += 256; borrow = 1; } else borrow = 0; out[i] = (byte)diff; } return out; }
-    private static byte[] mul(byte[] a, byte[] b) {
-        int[] a16 = to16(a); int[] b16 = to16(b); int[] prod = new int[31];
-        for (int i = 0; i < 16; i++) { long carry = 0; for (int j = 0; j < 16; j++) { carry += (long)(a16[i] & 0xFFFF) * (b16[j] & 0xFFFF) + prod[i+j]; prod[i+j] = (int)(carry & 0xFFFF); carry >>= 16; } prod[i+16] = (int)carry; }
-        for (int i = 30; i >= 16; i--) { long v = (long)prod[i] * 38L; prod[i - 16] += (int)(v & 0xFFFF); if (i - 15 < 31) prod[i - 15] += (int)(v >> 16); }
-        int carry = 0; int[] out16 = new int[16]; for (int i = 0; i < 16; i++) { int v = prod[i] + carry; out16[i] = v & 0xFFFF; carry = v >> 16; }
-        if (carry != 0) { long v = (long)carry * 38L; out16[0] += (int)(v & 0xFFFF); out16[1] += (int)(v >> 16); int c = 0; for (int i = 0; i < 16; i++) { int v2 = out16[i] + c; out16[i] = v2 & 0xFFFF; c = v2 >> 16; } if (c != 0) { long v = (long)c * 38L; out16[0] += (int)(v & 0xFFFF); out16[1] += (int)(v >> 16); } }
-        byte[] out = new byte[32]; for (int i = 0; i < 16; i++) { out[2*i] = (byte)(out16[i] & 0xFF); out[2*i + 1] = (byte)((out16[i] >> 8) & 0xFF); } out[31] &= 0x7F; return out; }
+
+    public static byte[] derivePublicKey(byte[] privateKey) {
+        return scalarMult(privateKey, basePoint());
     }
-    private static byte[] sqr(byte[] a) { return mul(a, a); }
-    private static void mulSmall(byte[] a, int k) { long carry = 0; for (int i = 0; i < 16; i++) { int limb = (a[2*i] & 0xFF) | ((a[2*i+1] & 0xFF) << 8); carry += (long)limb * k; a[2*i] = (byte)(carry & 0xFF); a[2*i + 1] = (byte)((carry >> 8) & 0xFF); carry >>= 16; } long v = carry * 38L; a[0] += (int)(v & 0xFF); a[1] += (int)(v >> 16); int carry2 = 0; for (int i = 0; i < 16; i++) { int v = (a[2*i] & 0xFF) | ((a[2*i+1] & 0xFF) << 8); v += carry2; a[2*i] = (byte)(v & 0xFF); a[2*i+1] = (byte)((v >> 8) & 0xFF); carry2 = v >> 16; } a[31] &= 0x7F; }
-    private static byte[] invert(byte[] a) { byte[] out = new byte[32]; out[0] = 1; return out; }
-    private static int[] to16(byte[] b) { int[] out = new int[16]; for (int i = 0; i < 16; i++) out[i] = (b[2*i] & 0xFF) | ((b[2*i+1] & 0xFF) << 8); return out; }
-    private static void clampScalar(byte[] k) { k[0] &= 0xF8; k[31] &= 0x7F; k[31] |= 0x40; }
-    private static void cswap(byte[] a, byte[] b) { for (int i = 0; i < 32; i++) { byte t = a[i]; a[i] = b[i]; b[i] = t; } }
-    public static byte[] basePoint() { byte[] bp = new byte[32]; bp[0] = 9; return bp; }
+
+    public static byte[] keyAgreement(byte[] myPrivateKey, byte[] theirPublicKey) {
+        return scalarMult(myPrivateKey, theirPublicKey);
+    }
+
+    public static byte[] basePoint() {
+        byte[] bp = new byte[32];
+        bp[0] = 9;
+        return bp;
+    }
+
+    // ---- Encoding ----
+
+    private static void clampScalar(byte[] k) {
+        k[0] &= 0xF8;   // clear the 3 low bits
+        k[31] &= 0x7F;  // clear bit 255
+        k[31] |= 0x40;  // set bit 254
+    }
+
+    private static int[] toLimbs(byte[] b) {
+        int[] x = new int[16];
+        for (int i = 0; i < 16; i++) x[i] = (b[2*i] & 0xFF) | ((b[2*i + 1] & 0xFF) << 8);
+        x[15] &= 0x7FFF;  // RFC 7748: mask the most significant bit
+        return x;
+    }
+
+    private static byte[] fromLimbs(int[] x) {
+        byte[] b = new byte[32];
+        for (int i = 0; i < 16; i++) {
+            b[2*i] = (byte) x[i];
+            b[2*i + 1] = (byte) (x[i] >> 8);
+        }
+        return b;
+    }
+
+    private static int[] constant(int v) {
+        int[] x = new int[16];
+        x[0] = v;
+        return x;
+    }
+
+    // ---- Field arithmetic mod 2^255 - 19 ----
+
+    private static int[] add(int[] a, int[] b) {
+        long[] t = new long[16];
+        long carry = 0;
+        for (int i = 0; i < 16; i++) {
+            long v = a[i] + b[i] + carry;
+            t[i] = v & 0xFFFF;
+            carry = v >>> 16;
+        }
+        return canon(normalize(t));
+    }
+
+    private static int[] sub(int[] a, int[] b) {
+        long[] t = new long[16];
+        long borrow = 0;
+        for (int i = 0; i < 16; i++) {
+            long d = a[i] - b[i] - borrow;
+            if (d < 0) { d += 0x10000; borrow = 1; } else borrow = 0;
+            t[i] = d;
+        }
+        if (borrow != 0) {
+            // a < b: t holds a - b + 2^256; subtract 2^255 + 19 to get a - b + p.
+            long br = 0;
+            for (int i = 0; i < 16; i++) {
+                long s = (i == 0) ? 19 : (i == 15) ? 0x8000 : 0;
+                long d = t[i] - s - br;
+                if (d < 0) { d += 0x10000; br = 1; } else br = 0;
+                t[i] = d;
+            }
+        }
+        int[] r = new int[16];
+        for (int i = 0; i < 16; i++) r[i] = (int) t[i];
+        return r;
+    }
+
+    private static int[] mul(int[] a, int[] b) {
+        long[] t = new long[31];
+        for (int i = 0; i < 16; i++) {
+            long ai = a[i];
+            if (ai == 0) continue;
+            for (int j = 0; j < 16; j++) t[i + j] += ai * b[j];
+        }
+        // Words 16..30 have weight 2^(16k); since 2^256 = 38 (mod p) each folds
+        // into words k-16 (low half) and k-15 (high half).
+        for (int k = 30; k >= 16; k--) {
+            long v = t[k];
+            if (v != 0) {
+                t[k - 16] += (v & 0xFFFF) * 38;
+                t[k - 15] += (v >>> 16) * 38;
+            }
+        }
+        return canon(normalize(t));
+    }
+
+    private static int[] sqr(int[] a) {
+        return mul(a, a);
+    }
+
+    /** Carry-propagates 16 long limbs into 16-bit digits, folding 2^256 = 38 back in. */
+    private static int[] normalize(long[] t) {
+        long carry = 0;
+        for (int i = 0; i < 16; i++) {
+            long v = t[i] + carry;
+            t[i] = v & 0xFFFF;
+            carry = v >>> 16;
+        }
+        while (carry != 0) {
+            long v = t[0] + carry * 38;
+            t[0] = v & 0xFFFF;
+            carry = v >>> 16;
+            for (int i = 1; i < 16 && carry != 0; i++) {
+                v = t[i] + carry;
+                t[i] = v & 0xFFFF;
+                carry = v >>> 16;
+            }
+        }
+        int[] out = new int[16];
+        for (int i = 0; i < 16; i++) out[i] = (int) t[i];
+        return out;
+    }
+
+    /** Fully reduces a 16-digit value below p (at most two subtractions needed). */
+    private static int[] canon(int[] a) {
+        return trySubP(trySubP(a));
+    }
+
+    private static int[] trySubP(int[] a) {
+        long borrow = 0;
+        int[] r = new int[16];
+        for (int i = 0; i < 16; i++) {
+            int pl = (i == 0) ? 0xFFED : (i == 15) ? 0x7FFF : 0xFFFF;
+            long d = a[i] - pl - borrow;
+            if (d < 0) { d += 0x10000; borrow = 1; } else borrow = 0;
+            r[i] = (int) d;
+        }
+        return (borrow == 0) ? r : a;
+    }
+
+    /** Branchless conditional swap of two limbs arrays. */
+    private static void cswap(int bit, int[] a, int[] b) {
+        int mask = 0 - bit;  // 0 or -1
+        for (int i = 0; i < 16; i++) {
+            int t = mask & (a[i] ^ b[i]);
+            a[i] ^= t;
+            b[i] ^= t;
+        }
+    }
+
+    /** Computes z^(p - 2) = z^-1 in GF(p) with the standard addition chain. */
+    private static int[] invert(int[] z) {
+        int[] t0 = sqr(z);                 // z^2
+        int[] t1 = sqr(t0);                // z^4
+        t1 = sqr(t1);                      // z^8
+        t1 = mul(z, t1);                   // z^9
+        t0 = mul(t0, t1);                  // z^11
+        int[] t2 = sqr(t0);                // z^22
+        t1 = mul(t1, t2);                  // z^(2^5 - 1)
+        t2 = sqr(t1);
+        for (int i = 1; i < 5; i++) t2 = sqr(t2);
+        t1 = mul(t2, t1);                  // z^(2^10 - 1)
+        t2 = sqr(t1);
+        for (int i = 1; i < 10; i++) t2 = sqr(t2);
+        t2 = mul(t2, t1);                  // z^(2^20 - 1)
+        int[] t3 = sqr(t2);
+        for (int i = 1; i < 20; i++) t3 = sqr(t3);
+        t2 = mul(t3, t2);                  // z^(2^40 - 1)
+        t2 = sqr(t2);
+        for (int i = 1; i < 10; i++) t2 = sqr(t2);
+        t1 = mul(t2, t1);                  // z^(2^50 - 1)
+        t2 = sqr(t1);
+        for (int i = 1; i < 50; i++) t2 = sqr(t2);
+        t2 = mul(t2, t1);                  // z^(2^100 - 1)
+        t3 = sqr(t2);
+        for (int i = 1; i < 100; i++) t3 = sqr(t3);
+        t2 = mul(t3, t2);                  // z^(2^200 - 1)
+        t2 = sqr(t2);
+        for (int i = 1; i < 50; i++) t2 = sqr(t2);
+        t1 = mul(t2, t1);                  // z^(2^250 - 1)
+        t1 = sqr(t1);
+        for (int i = 1; i < 5; i++) t1 = sqr(t1);
+        return mul(t1, t0);                // z^(2^255 - 21) = z^(p - 2)
+    }
 }
-EOF
-cp /tmp/curve25519.java /home/uday/chatterbox/midlet/src/com/chatterbox/crypto/Curve25519.java
-export PATH=/tmp/opencode/jdk-17.0.20.1+1/bin:$PATH && cd /home/uday/chatterbox && javac -nowarn -encoding UTF-8 -cp build/stub -d build/classes $(find midlet/src -name '*.java') 2>&1|grep -v '^Note'|head -20

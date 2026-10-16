@@ -18,6 +18,7 @@ public final class TestMain {
         CoreTest.class,
         SessionTest.class,
         CryptoTest.class,
+        X25519Test.class,
         SecurityTest.class
     };
 
