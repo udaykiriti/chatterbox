@@ -67,7 +67,7 @@ public final class ProfileStore {
     }
 
     public void setTheme(int t) {
-        theme = (t == 1) ? 1 : 0;
+        theme = (t >= 0 && t < com.chatterbox.core.Theme.COUNT) ? t : 0;
         dirty = true;
     }
 
@@ -201,6 +201,9 @@ public final class ProfileStore {
         try {
             java.io.DataInputStream in = RmsStore.in(data);
             theme = in.readInt();
+            if (theme < 0 || theme >= com.chatterbox.core.Theme.COUNT) {
+                theme = 0;
+            }
             alertVibrate = in.readBoolean();
             alertBeep = in.readBoolean();
             showTimestamps = in.readBoolean();

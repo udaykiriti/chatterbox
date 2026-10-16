@@ -119,7 +119,7 @@ public final class SettingsScreen extends Form implements CommandListener {
     private void buildGlobal() {
         themeGroup = new javax.microedition.lcdui.ChoiceGroup("Theme",
                 javax.microedition.lcdui.Choice.EXCLUSIVE,
-                new String[] { "Dark", "Light" }, null);
+                new String[] { "Dark", "Light", "High contrast", "Amber" }, null);
         themeGroup.setSelectedIndex(store.getTheme(), true);
         append(themeGroup);
 

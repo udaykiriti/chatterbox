@@ -7,6 +7,7 @@ import com.chatterbox.core.IrcCase;
 import com.chatterbox.core.Message;
 import com.chatterbox.core.MessageRing;
 import com.chatterbox.core.Str;
+import com.chatterbox.core.Theme;
 import com.chatterbox.core.UserEntry;
 import com.chatterbox.net.FloodQueue;
 
@@ -172,6 +173,25 @@ public class CoreTest extends TestCase {
         assertEquals("09", Str.two(9));
         assertEquals("10", Str.two(10));
         assertEquals("59", Str.two(59));
+    }
+
+    public void testThemeOfResolvesAllKinds() {
+        assertEquals(0x000000, Theme.of(Theme.DARK).bg);
+        assertEquals(0xFFFFFF, Theme.of(Theme.LIGHT).bg);
+        assertEquals(0x000000, Theme.of(Theme.HIGH_CONTRAST).bg);
+        assertEquals(0x1A0F00, Theme.of(Theme.AMBER).bg);
+        // Unknown/corrupt ids fall back to dark, never null.
+        assertEquals(0x000000, Theme.of(99).bg);
+        assertEquals(0x000000, Theme.of(-1).bg);
+        assertEquals(4, Theme.COUNT);
+    }
+
+    public void testNickColourIsStableAndMemoized() {
+        Theme t = Theme.of(Theme.DARK);
+        int a = t.colorForNick("SomeNick", t);
+        int b = t.colorForNick("somenick", t);
+        assertEquals(a, b);
+        assertEquals(a, t.colorForNick("SomeNick", t));
     }
 
     // ---- ChannelState ----

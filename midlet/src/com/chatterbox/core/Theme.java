@@ -11,6 +11,11 @@ public final class Theme {
 
     public static final int DARK = 0;
     public static final int LIGHT = 1;
+    public static final int HIGH_CONTRAST = 2;
+    public static final int AMBER = 3;
+
+    /** Number of built-in themes; Settings and ProfileStore clamp to this. */
+    public static final int COUNT = 4;
 
     /** Foreground, background, nick palette, highlight, system, link. */
     public int bg;
@@ -79,7 +84,64 @@ public final class Theme {
     }
 
     public static Theme of(int kind) {
-        return kind == LIGHT ? light() : dark();
+        if (kind == LIGHT) {
+            return light();
+        }
+        if (kind == HIGH_CONTRAST) {
+            return highContrast();
+        }
+        if (kind == AMBER) {
+            return amber();
+        }
+        return dark();
+    }
+
+    /**
+     * Maximum-contrast theme for sunlight and weak eyesight: pure white on
+     * black, yellow-on-black highlights, no dim greys anywhere.
+     */
+    public static Theme highContrast() {
+        Theme t = new Theme();
+        t.bg = 0x000000;
+        t.fg = 0xFFFFFF;
+        t.system = 0xFFFFFF;
+        t.highlightBg = 0xFFFF00;
+        t.highlightFg = 0x000000;
+        t.nick = 0x00FF00;
+        t.nickSelf = 0xFF8000;
+        t.nickAlt = 0x00FFFF;
+        t.link = 0x00FFFF;
+        t.inputBg = 0x000000;
+        t.inputFg = 0xFFFFFF;
+        t.cursor = 0xFFFF00;
+        t.scrollbar = 0xFFFFFF;
+        t.unread = 0xFF0000;
+        t.timestamp = 0xFFFFFF;
+        return t;
+    }
+
+    /**
+     * Amber-terminal theme: warm phosphor look, dimmer than Dark for night
+     * use on devices whose lowest backlight is still bright.
+     */
+    public static Theme amber() {
+        Theme t = new Theme();
+        t.bg = 0x1A0F00;
+        t.fg = 0xFFB000;
+        t.system = 0xCC7A00;
+        t.highlightBg = 0x4A2E00;
+        t.highlightFg = 0xFFD080;
+        t.nick = 0xFFCF40;
+        t.nickSelf = 0xFFFFFF;
+        t.nickAlt = 0xFF8C00;
+        t.link = 0xFFD080;
+        t.inputBg = 0x140C00;
+        t.inputFg = 0xFFB000;
+        t.cursor = 0xFFB000;
+        t.scrollbar = 0x6B4A00;
+        t.unread = 0xFF4040;
+        t.timestamp = 0x8A6A30;
+        return t;
     }
 
     public static int argb(int rgb) {
