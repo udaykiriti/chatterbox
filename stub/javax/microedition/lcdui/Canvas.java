@@ -1,5 +1,11 @@
 package javax.microedition.lcdui;
 
+/** JSR 118 javax.microedition.lcdui.Canvas (compile stub).
+ *
+ * Only the real MIDP-2.0 surface is declared. The app's own key-code aliases
+ * (KEY_UP/KEY_SOFT1/etc.) live privately inside ChatCanvas — they are not
+ * part of the MIDP API, and device firmwares vary, which is exactly why the
+ * on-device checklist exists. */
 public abstract class Canvas extends Displayable {
     public static final int UP = 1;
     public static final int DOWN = 6;
@@ -22,29 +28,19 @@ public abstract class Canvas extends Displayable {
     public static final int KEY_NUM9 = 57;
     public static final int KEY_STAR = 42;
     public static final int KEY_POUND = 35;
-    public static final int KEY_NUM_STAR = 42;
-    public static final int KEY_NUM_POUND = 35;
-    public static final int KEY_NUM_ENTER = 10;
-    public static final int KEY_ENTER = 10;
-    public static final int KEY_LEFT = -2;
-    public static final int KEY_RIGHT = -5;
-    public static final int KEY_UP = -1;
-    public static final int KEY_DOWN = -6;
-    public static final int KEY_DEL = 8;
-    public static final int KEY_BACKSPACE = 8;
-    public static final int KEY_CLEAR = 12;
-    public static final int KEY_SOFT1 = -4;
-    public static final int KEY_SOFT2 = -3;
 
     protected Canvas() {}
     public final void serviceRepaints() {}
+    public void repaint() {}
+    public void repaint(int x, int y, int w, int h) {}
     public void setFullScreenMode(boolean mode) {}
     public boolean hasPointerEvents() { return false; }
     public boolean hasPointerMotionEvents() { return false; }
     public boolean hasRepeatEvents() { return true; }
     public boolean hasDoubleBuffer() { return true; }
     public int getGameAction(int keyCode) { return 0; }
-    public String getGameActionName(int keyCode) { return ""; }
+    public int getKeyCode(int gameAction) { return 0; }
+    public String getKeyName(int keyCode) { return ""; }
     protected void showNotify() {}
     protected void hideNotify() {}
     protected void keyPressed(int keyCode) {}

@@ -1,7 +1,9 @@
 package javax.microedition.lcdui;
 
+/** JSR 118 javax.microedition.lcdui.TextField (compile stub). */
 public class TextField extends Item {
     public static final int ANY = 0;
+    public static final int EMAILADDR = 1;
     public static final int NUMERIC = 2;
     public static final int PHONENUMBER = 3;
     public static final int URL = 4;
@@ -9,15 +11,17 @@ public class TextField extends Item {
     public static final int PASSWORD = 0x10000;
     public static final int UNEDITABLE = 0x20000;
 
-    public TextField(String label, String text, int maxSize, int constraints) { super(label); }
+    public TextField(String label, String text, int maxSize, int constraints) {
+        super(label);
+    }
+
     public String getString() { return ""; }
     public void setString(String text) {}
+    public void insert(String src, int position) {}
+    public void delete(int offset, int length) {}
+    public int size() { return 0; }
+    public int setMaxSize(int size) { return 0; }
     public int getMaxSize() { return 0; }
-    public void setMaxSize(int size) {}
+    public void setConstraints(int constraints) {}
     public int getConstraints() { return 0; }
-    public void setConstraints(int c) {}
-    public int getCaretPosition() { return 0; }
-    public void setCaretPosition(int pos) {}
-    public void insertString(String s) {}
-    public void delete(int offset, int len) {}
 }
