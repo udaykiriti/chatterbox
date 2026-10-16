@@ -27,7 +27,7 @@ public final class LogViewer extends Form implements CommandListener {
         this.midlet = midlet;
         this.logStore = log;
 
-        content = new TextField("", "", 32000, TextField.ANY | TextField.UNEDITABLE);
+        content = new TextField("Log", "", 20000, TextField.ANY | TextField.UNEDITABLE);
         append(content);
 
         addCommand(backCmd);

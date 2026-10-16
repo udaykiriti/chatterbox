@@ -28,7 +28,7 @@ public final class ChannelListScreen extends List implements CommandListener {
     private String filter = "";
 
     public ChannelListScreen(ChatterboxMIDlet midlet, IrcConnection conn) {
-        super("Channel List", List.SINGLE);
+        super("Channel List", javax.microedition.lcdui.Choice.EXCLUSIVE);
         this.midlet = midlet;
         this.conn = conn;
 

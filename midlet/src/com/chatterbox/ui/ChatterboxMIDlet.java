@@ -71,8 +71,12 @@ public final class ChatterboxMIDlet extends MIDlet implements IrcEventListener {
                 // A failure here must still give the user a usable screen with
                 // an explanation, not a silent black screen.
                 display = Display.getDisplay(this);
-                javax.microedition.lcdui.Form fatal = new javax.microedition.lcdui.Form(
-                        "Chatterbox", new String[] { "Startup failed", errorOf(t) });
+                javax.microedition.lcdui.Form fatal =
+                        new javax.microedition.lcdui.Form("Chatterbox");
+                fatal.append(new javax.microedition.lcdui.StringItem(
+                        "Startup failed", errorOf(t)));
+                fatal.addCommand(new javax.microedition.lcdui.Command(
+                        "Exit", javax.microedition.lcdui.Command.EXIT, 1));
                 fatal.setCommandListener(new FatalFormListener());
                 display.setCurrent(fatal);
                 return;
@@ -94,6 +98,7 @@ public final class ChatterboxMIDlet extends MIDlet implements IrcEventListener {
         store = new ProfileStore();
         theme = Theme.of(store.getTheme());
         alert = new Notifier();
+        alert.setDisplay(Display.getDisplay(this));
         Notifier.Handler.install(display);
         manager = new SessionManager();
         manager.setListener(this);

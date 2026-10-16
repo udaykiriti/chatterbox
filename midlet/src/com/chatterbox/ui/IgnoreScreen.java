@@ -22,7 +22,7 @@ public final class IgnoreScreen extends List implements CommandListener {
     private final Command backCmd = new Command("Back", Command.BACK, 3);
 
     public IgnoreScreen(ChatterboxMIDlet midlet, IgnoreList list) {
-        super("Ignore List (" + list.size() + ")", List.SINGLE);
+        super("Ignore List (" + list.size() + ")", javax.microedition.lcdui.Choice.EXCLUSIVE);
         this.midlet = midlet;
         this.ignoreList = list;
 
@@ -69,8 +69,9 @@ public final class IgnoreScreen extends List implements CommandListener {
         Form f = new Form("Add Ignore");
         final TextField pattern = new TextField("Pattern (use * ?)", "", 64, TextField.ANY);
         final javax.microedition.lcdui.ChoiceGroup type = new javax.microedition.lcdui.ChoiceGroup("Match",
-                new String[] { "Nick", "Host (user@host)" }, 1,
-                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Nick", "Host (user@host)" }, null);
+        type.setSelectedIndex(1, true);
         f.append(pattern);
         f.append(type);
         f.addCommand(new Command("Add", Command.OK, 1));

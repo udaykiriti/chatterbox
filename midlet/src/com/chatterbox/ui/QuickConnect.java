@@ -30,8 +30,8 @@ public final class QuickConnect extends Form implements CommandListener {
         portField = new TextField("Port", "6697", 5, TextField.NUMERIC);
         nickField = new TextField("Nick", "chatterbox", 30, TextField.ANY);
         tlsGroup = new javax.microedition.lcdui.ChoiceGroup("Security",
-                new String[] { "TLS (ssl://)", "Plain" }, 1,
-                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "TLS (ssl://)", "Plain" }, null);
 
         append(hostField);
         append(portField);

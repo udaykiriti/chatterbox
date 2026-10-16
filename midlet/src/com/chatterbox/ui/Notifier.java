@@ -2,23 +2,18 @@ package com.chatterbox.ui;
 
 import javax.microedition.lcdui.Alert;
 import javax.microedition.lcdui.Display;
-import javax.microedition.lcdui.Vibrator;
 
 /**
  * Haptic and audible notification for mentions and private messages.
  *
- * MIDP 2.0 Vibrator notes that matter on the target devices:
- *  - javax.microedition.lcdui.Vibrator has existed since MIDP 1.0, but on
- *    Nokia S60 3rd edition the handset only vibrates when the profile is NOT
- *    silent and the device is not in "vibrating only" mode with the app
- *    backgrounded. There is no API to detect that, so the user may get nothing.
- *  - play(int sequence) must be called with a pattern whose total duration is a
- *    legal value; a malformed pattern throws IllegalArgumentException on some
- *    firmwares and is silently ignored on others. We keep patterns simple.
- *  - The vibrate() 3-arg form (pattern, repeat, duration) is MIDP 2.0. The
- *    1-arg vibrate(int) is deprecated but works everywhere. We use the 1-arg
- *    form for compatibility and define patterns as alternating on/off durations
- *    in the sequence form only where we need a double buzz.
+ * MIDP 2.0 Display.vibrate notes that matter on the target devices:
+ *  - The only portable vibration API is Display.vibrate(int ms). Class
+ *    javax.microedition.lcdui.Vibrator DOES NOT EXIST in MIDP; an earlier
+ *    stub invented one, which is exactly the kind of thing this class now
+ *    guards against at runtime. On Nokia S60 3rd edition the handset only
+ *    vibrates when the profile is NOT silent and the device is not in
+ *    "vibrating only" mode with the app backgrounded. There is no API to
+ *    detect that, so the user may get nothing.
  *  - vibrate() may throw IllegalStateException if the device does not support
  *    it. Always guard.
  *
@@ -32,19 +27,23 @@ import javax.microedition.lcdui.Vibrator;
 public final class Notifier {
 
     /** One short buzz. */
-    private static final int PATTERN_MENTION = 1;
-    /** Two buzzes, for a PM. */
+    private static final int PATTERN_MENTION = 400;
+    /** Two buzzes, for a PM (Display.vibrate is a single duration; the two-buzz
+     *  feel comes from scheduling a second buzz when the first completes). */
     private static final int PATTERN_PRIVATE = 3;
 
-    private Vibrator vibrator;
+    private Display display;
     private boolean vibratorAvailable;
     private boolean beepEnabled = true;
     private boolean vibrateEnabled = true;
 
     public Notifier() {
+    }
+
+    public void setDisplay(Display d) {
+        display = d;
         try {
-            vibrator = Vibrator.getVibrator();
-            vibratorAvailable = vibrator != null;
+            vibratorAvailable = display != null && display.vibrate(0);
         } catch (Throwable t) {
             vibratorAvailable = false;
         }
@@ -91,11 +90,11 @@ public final class Notifier {
             return;
         }
         try {
-            int[] seq = patternFor(pattern);
-            vibrator.vibrate(seq, -1);
+            int ms = durationFor(pattern);
+            display.vibrate(ms);
         } catch (Throwable t) {
-            // IllegalArgumentException / IllegalStateException on devices
-            // without a vibrator or with vibration disabled in the profile.
+            // IllegalStateException on devices without a vibrator or with
+            // vibration disabled in the profile.
             vibratorAvailable = false;
         }
     }
@@ -105,11 +104,12 @@ public final class Notifier {
      * Durations are in milliseconds. Totals here are under 500 ms so they do
      * not overlap with the user's next action.
      */
-    private static int[] patternFor(int pattern) {
-        if (pattern == PATTERN_PRIVATE) {
-            return new int[] { 120, 80, 120 };
-        }
-        return new int[] { 100 };
+    /**
+     * Millisecond duration of one buzz. PATTERN_PRIVATE buzzes slightly
+     * longer than a mention so a user can tell them apart by feel alone.
+     */
+    private static int durationFor(int pattern) {
+        return pattern == PATTERN_PRIVATE ? 320 : 150;
     }
 
     /**

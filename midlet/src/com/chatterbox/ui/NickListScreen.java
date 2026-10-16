@@ -31,7 +31,8 @@ public final class NickListScreen extends List implements CommandListener {
 
     public NickListScreen(ChatCanvas parent, ChannelState window) {
         super(window.getName() + " (" + window.userCount() + ")",
-                new String[] { "no users" }, List.SINGLE);
+                javax.microedition.lcdui.Choice.EXCLUSIVE);
+        append("no users", null);
         this.parent = parent;
         this.window = window;
         addCommand(new Command("Select", Command.OK, 1));

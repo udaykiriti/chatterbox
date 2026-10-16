@@ -118,34 +118,35 @@ public final class SettingsScreen extends Form implements CommandListener {
 
     private void buildGlobal() {
         themeGroup = new javax.microedition.lcdui.ChoiceGroup("Theme",
-                new String[] { "Dark", "Light" }, 1,
-                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Dark", "Light" }, null);
         themeGroup.setSelectedIndex(store.getTheme(), true);
         append(themeGroup);
 
         alertGroup = new javax.microedition.lcdui.ChoiceGroup("Alerts",
-                new String[] { "Vibrate", "Sound" },
-                (store.isAlertVibrate() ? 0 : 1) | (store.isAlertBeep() ? 2 : 0),
-                javax.microedition.lcdui.ChoiceGroup.MULTIPLE);
+                javax.microedition.lcdui.Choice.MULTIPLE,
+                new String[] { "Vibrate", "Sound" }, null);
+        alertGroup.setSelectedFlags(new boolean[] { store.isAlertVibrate(),
+                store.isAlertBeep() });
         append(alertGroup);
 
         viewGroup = new javax.microedition.lcdui.ChoiceGroup("Display",
-                new String[] { "Timestamps", "Detect URLs", "Log to RMS", "Require TLS" },
-                (store.isShowTimestamps() ? 0 : 1)
-                        | (store.isDetectUrls() ? 0 : 2)
-                        | (store.isLogToRms() ? 0 : 4)
-                        | (store.isRequireTls() ? 0 : 8),
-                javax.microedition.lcdui.ChoiceGroup.MULTIPLE);
+                javax.microedition.lcdui.Choice.MULTIPLE,
+                new String[] { "Timestamps", "Detect URLs", "Log to RMS", "Require TLS" }, null);
+        viewGroup.setSelectedFlags(new boolean[] { store.isShowTimestamps(),
+                store.isDetectUrls(), store.isLogToRms(), store.isRequireTls() });
         append(viewGroup);
 
         gwHost = new TextField("Gateway host", store.getGatewayHost(), 64, TextField.ANY);
-        append("Relay", new Item[] { gwHost });
         gwPort = new TextField("Gateway port", String.valueOf(store.getGatewayPort()),
                 5, TextField.NUMERIC);
         gwPass = new TextField("Gateway pass", store.getGatewayPassword(), 48, TextField.PASSWORD);
-        append("Relay auth", new Item[] { gwPort, gwPass });
         floodDelay = new TextField("Flood ms/line", "700", 4, TextField.NUMERIC);
-        append("Flood control", new Item[] { floodDelay });
+        append(new StringItem("Relay (optional TLS terminator)", ""));
+        append(gwHost);
+        append(gwPort);
+        append(gwPass);
+        append(floodDelay);
 
         // Export/Import info
         append(new StringItem("Backup", "Export profiles to file"));
@@ -161,25 +162,36 @@ public final class SettingsScreen extends Form implements CommandListener {
         fHost = new TextField("Server", "", 64, TextField.ANY);
         fPort = new TextField("Port", "6697", 5, TextField.NUMERIC);
         fSecure = new javax.microedition.lcdui.ChoiceGroup("Use TLS",
-                new String[] { "ssl:// first", "plain only" }, 0,
-                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
-        append("Identity", new Item[] { fName, fHost, fPort, fSecure });
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "ssl:// first", "plain only" }, null);
+        append(new StringItem("Identity", ""));
+        append(fName);
+        append(fHost);
+        append(fPort);
+        append(fSecure);
 
         fNick = new TextField("Nick", "", 30, TextField.ANY);
         fAltNick = new TextField("Alt nick", "", 30, TextField.ANY);
         fPass = new TextField("Password", "", 40, TextField.PASSWORD);
         fReal = new TextField("Real name", "", 40, TextField.ANY);
-        append("User", new Item[] { fNick, fAltNick, fPass, fReal });
+        append(new StringItem("User", ""));
+        append(fNick);
+        append(fAltNick);
+        append(fPass);
+        append(fReal);
 
         fChannels = new TextField("Channels", "", 200, TextField.ANY);
-        append("Join on connect (comma separated, optional key after a space)", fChannels);
+        append(new StringItem("Join on connect", "comma separated, optional key after a space"));
+        append(fChannels);
 
         fE2e = new javax.microedition.lcdui.ChoiceGroup("E2E mode",
-                new String[] { "off", "on (encrypt)" }, 0,
-                javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "off", "on (encrypt)" }, null);
         fE2eKey = new TextField("E2E key (shared secret)", "",
                 128, TextField.PASSWORD);
-        append("End-to-end encryption", new Item[] { fE2e, fE2eKey });
+        append(new StringItem("End-to-end encryption", ""));
+        append(fE2e);
+        append(fE2eKey);
         fillProfileForm();
     }
 
@@ -236,13 +248,15 @@ public final class SettingsScreen extends Form implements CommandListener {
 
     private void saveGlobals() {
         store.setTheme(themeGroup.getSelectedIndex());
-        int bits = alertGroup.getSelectedIndices();
-        store.setAlerts((bits & 1) != 0, (bits & 2) != 0);
-        int view = viewGroup.getSelectedIndices();
-        store.setShowTimestamps((view & 1) != 0);
-        store.setDetectUrls((view & 2) != 0);
-        store.setLogToRms((view & 4) != 0);
-        store.setRequireTls((view & 8) != 0);
+        boolean[] alertsSel = new boolean[alertGroup.size()];
+        alertGroup.getSelectedFlags(alertsSel);
+        store.setAlerts(alertsSel[0], alertsSel[1]);
+        boolean[] viewSel = new boolean[viewGroup.size()];
+        viewGroup.getSelectedFlags(viewSel);
+        store.setShowTimestamps(viewSel[0]);
+        store.setDetectUrls(viewSel[1]);
+        store.setLogToRms(viewSel[2]);
+        store.setRequireTls(viewSel[3]);
         store.setGateway(gwHost.getString(), Str.parseInt(gwPort.getString(), 0),
                 gwPass.getString());
         long delay = Str.parseInt(floodDelay.getString(), 700);

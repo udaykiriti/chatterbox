@@ -54,7 +54,8 @@ public final class ServerListScreen extends List implements CommandListener {
 
     public ServerListScreen(ChatterboxMIDlet midlet, SessionManager manager,
                             ProfileStore store) {
-        super("Chatterbox", new String[] { "Loading..." }, List.SINGLE);
+        super("Chatterbox", javax.microedition.lcdui.Choice.EXCLUSIVE);
+        append("Loading...", null);
         this.midlet = midlet;
         this.manager = manager;
         this.store = store;
@@ -142,15 +143,14 @@ public final class ServerListScreen extends List implements CommandListener {
             }
         }
 
-        if (getItemCount() == 0) {
+        if (size() == 0) {
             append("No servers configured. Press Options > Add server.", null);
             serverIds.addElement("");
             windowRefs.addElement(null);
         }
-        if (oldSelected >= 0 && oldSelected < getItemCount()) {
-            setSelectedIndex(oldSelected);
+        if (oldSelected >= 0 && oldSelected < size()) {
+            setSelectedIndex(oldSelected, true);
         }
-        repaint();
     }
 
     private String stateMark(IrcConnection c) {

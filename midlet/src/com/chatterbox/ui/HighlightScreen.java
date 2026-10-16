@@ -24,7 +24,7 @@ public final class HighlightScreen extends List implements CommandListener {
     private final Command backCmd = new Command("Back", Command.BACK, 4);
 
     public HighlightScreen(ChatterboxMIDlet midlet, HighlightRules r) {
-        super("Highlights (" + r.size() + ")", List.SINGLE);
+        super("Highlights (" + r.size() + ")", javax.microedition.lcdui.Choice.EXCLUSIVE);
         this.midlet = midlet;
         this.rules = r;
 
@@ -82,15 +82,21 @@ public final class HighlightScreen extends List implements CommandListener {
     private void openRuleForm(final HighlightRules.Rule existing) {
         Form f = new Form(existing == null ? "Add Highlight" : "Edit Highlight");
         final TextField pattern = new TextField("Pattern", existing == null ? "" : existing.pattern, 64, TextField.ANY);
-        final ChoiceGroup whole = new ChoiceGroup("Whole word", new String[] { "Yes", "No" }, 1,
-                ChoiceGroup.EXCLUSIVE);
-        final ChoiceGroup cases = new ChoiceGroup("Case sensitive", new String[] { "Yes", "No" }, 1,
-                ChoiceGroup.EXCLUSIVE);
-        final ChoiceGroup host = new ChoiceGroup("Match host", new String[] { "Yes", "No" }, 1,
-                ChoiceGroup.EXCLUSIVE);
+        final ChoiceGroup whole = new ChoiceGroup("Whole word",
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Yes", "No" }, null);
+        final ChoiceGroup cases = new ChoiceGroup("Case sensitive",
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Yes", "No" }, null);
+        final ChoiceGroup host = new ChoiceGroup("Match host",
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Yes", "No" }, null);
         f.append(pattern);
+        whole.setSelectedIndex(1, true);
         f.append(whole);
+        cases.setSelectedIndex(1, true);
         f.append(cases);
+        host.setSelectedIndex(1, true);
         f.append(host);
 
         if (existing != null) {

@@ -24,7 +24,7 @@ public final class ServiceScreen extends List implements CommandListener {
     private final Command backCmd = new Command("Back", Command.BACK, 4);
 
     public ServiceScreen(ChatterboxMIDlet midlet, ServiceIdentify s) {
-        super("Services (" + s.getServices().size() + ")", List.SINGLE);
+        super("Services (" + s.getServices().size() + ")", javax.microedition.lcdui.Choice.EXCLUSIVE);
         this.midlet = midlet;
         this.svc = s;
 
@@ -81,10 +81,15 @@ public final class ServiceScreen extends List implements CommandListener {
         final TextField pass = new TextField("Password", existing == null ? "" : existing.password, 64, TextField.PASSWORD);
         final TextField acct = new TextField("Account (opt)", existing == null ? "" : existing.account, 32, TextField.ANY);
         final TextField cmd = new TextField("Command", existing == null ? "IDENTIFY" : existing.command, 32, TextField.ANY);
-        final ChoiceGroup method = new ChoiceGroup("Method", new String[] { "PRIVMSG", "NOTICE", "QUOTE" }, 1,
-                ChoiceGroup.EXCLUSIVE);
-        final ChoiceGroup enabled = new ChoiceGroup("Enabled", new String[] { "Yes", "No" }, 1,
-                ChoiceGroup.EXCLUSIVE);
+        final ChoiceGroup method = new ChoiceGroup("Method",
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "PRIVMSG", "NOTICE", "QUOTE" }, null);
+        final ChoiceGroup enabled = new ChoiceGroup("Enabled",
+                javax.microedition.lcdui.Choice.EXCLUSIVE,
+                new String[] { "Yes", "No" }, null);
+
+        method.setSelectedIndex(1, true);
+        enabled.setSelectedIndex(1, true);
 
         if (existing != null) {
             method.setSelectedIndex(methodIndex(existing.method), true);
