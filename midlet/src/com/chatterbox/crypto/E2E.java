@@ -41,6 +41,9 @@ public final class E2E {
     /** Prefix an encrypted body starts with. The digit is the wire version. */
     public static final String PREFIX = "E2E:1:";
 
+    /** Prefix a version-2 (ratcheted) body starts with. */
+    public static final String PREFIX_V2 = "E2E:2:";
+
     /** First plaintext byte: normal message. */
     public static final byte KIND_CHAT = 'M';
     /** First plaintext byte: /me action. */
@@ -160,6 +163,14 @@ public final class E2E {
      * with a long server prefix.
      */
     static int maxPlaintextBytes(int targetLength) {
+        return maxPlaintextBytes(targetLength, 12 + 16 + 1); // nonce+tag+kind
+    }
+
+    /**
+     * Same budget with an explicit crypto overhead. v2 carries a 32-byte DH
+     * public plus a 4-byte counter instead of the 12-byte nonce.
+     */
+    static int maxPlaintextBytes(int targetLength, int cryptoOverhead) {
         int chars = (LINE_BUDGET - SERVER_PREFIX_ROOM)
                 - 2                                           // CRLF
                 - "PRIVMSG ".length()
@@ -167,7 +178,7 @@ public final class E2E {
                 - " :".length()
                 - PREFIX.length();
         int raw = (chars / 4) * 3;                            // base64 step
-        int plain = raw - 12 - 16 - 1;                        // nonce+tag+kind
+        int plain = raw - cryptoOverhead;
         return Math.max(plain, 16);                           // sanity floor
     }
 
@@ -328,5 +339,255 @@ public final class E2E {
             out[i] = (String) parts.elementAt(i);
         }
         return out;
+    }
+
+    // ------------------------------------------------------------------
+    // Version 2: Double Ratchet for private chats
+    // ------------------------------------------------------------------
+    //
+    // Pairwise ratchet bootstrapped from the same passphrase, so there is no
+    // handshake and no new UX: whoever speaks first generates a fresh DH key
+    // and ratchets against the peer's deterministic DH public (HKDF from the
+    // PSK + both nicks, computable by both sides). The first flight has
+    // PSK-equivalent secrecy; every flight after the first reply mixes fresh
+    // keys, giving forward secrecy against later PSK compromise.
+    //
+    // Wire: "E2E:2:" + base64( sender-DH(32) || N(4) || ct || tag(16) ).
+    // The DH header is what makes replies decryptable: on a new DH the
+    // receiver DH-ratchets before decrypting, and ratchets its own sending
+    // chain before its next send. Restarting either side self-heals: the
+    // fresh DH will not match, decrypt fails, and the receiver re-inits from
+    // the PSK and retries exactly once (only a PSK holder can produce a
+    // retry that succeeds).
+    //
+    // Scope: private (query) windows only. Group channels have no fan-out
+    // primitive on IRC and stay on v1 PSK.
+    //
+    // Honest limits: initial DH randomness comes from java.util.Random
+    // (clock-seeded; see Curve25519), so a passive observer who later learns
+    // the PSK can read the first flight. Out-of-order messages past MAX_SKIP
+    // (1000) are dropped, and a forged DH desyncs one session (healed by the
+    // retry rule above).
+
+    /** Overhead inside the base64 envelope: DH + counter + tag + kind byte. */
+    static final int V2_OVERHEAD = 32 + 4 + 16 + 1;
+
+    /** Minimum v2 blob: DH(32) + N(4) + tag(16) + kind(1). */
+    private static final int V2_MIN_BLOB = 32 + 4 + 16 + 1;
+
+    /** Per-peer ratchet sessions. Fresh per app launch; never persisted. */
+    public static final class RatchetState {
+        private final java.util.Hashtable peers = new java.util.Hashtable();
+
+        RatchetPeer peer(String foldedNick) {
+            return (RatchetPeer) peers.get(foldedNick);
+        }
+
+        void put(String foldedNick, RatchetPeer p) {
+            peers.put(foldedNick, p);
+        }
+
+        void drop(String foldedNick) {
+            peers.remove(foldedNick);
+        }
+
+        public int peerCount() {
+            return peers.size();
+        }
+    }
+
+    static final class RatchetPeer {
+        DoubleRatchet.Session session;
+        /** Peer advertised a new DH: ratchet our sending chain first. */
+        boolean sendRatchetNeeded;
+
+        RatchetPeer(DoubleRatchet.Session s) {
+            session = s;
+        }
+    }
+
+    /** Quick check without touching the payload. */
+    public static boolean isE2eV2(String text) {
+        return text != null && text.startsWith(PREFIX_V2)
+                && text.length() > PREFIX_V2.length();
+    }
+
+    /** Folded nick pair in stable order, so both sides derive the same root. */
+    static String[] orderedPair(String a, String b) {
+        String fa = lower(a);
+        String fb = lower(b);
+        if (fa.compareTo(fb) <= 0) {
+            return new String[] { fa, fb };
+        }
+        return new String[] { fb, fa };
+    }
+
+    /** Deterministic DH identity for one side of a nick pair ("lo"/"hi"). */
+    static byte[] detPrivate(byte[] pskKey, String lo, String hi, String role) {
+        return HKDF.hkdf(pskKey, Utf8.encode("det-dh-" + role),
+                Utf8.encode(lo + "|" + hi), 32);
+    }
+
+    static byte[] ratchetRoot(byte[] pskKey, String lo, String hi) {
+        return HKDF.hkdf(pskKey, Utf8.encode("ratchet-root-v1"),
+                Utf8.encode(lo + "|" + hi), 32);
+    }
+
+    static byte[] ratchetAd(String lo, String hi) {
+        return Utf8.encode("cb-ratchet-v1|" + lo + "|" + hi);
+    }
+
+    /** First speaker: fresh key, ratcheted against the peer's deterministic DH. */
+    static RatchetPeer initSender(byte[] pskKey, String selfNick, String peerNick) {
+        String[] pair = orderedPair(selfNick, peerNick);
+        String self = lower(selfNick);
+        String peerRole = self.equals(pair[0]) ? "hi" : "lo";
+        byte[] peerDetPub = Curve25519.derivePublicKey(
+                detPrivate(pskKey, pair[0], pair[1], peerRole));
+        byte[] myPriv = Curve25519.generatePrivateKey();
+        DoubleRatchet.Session s = DoubleRatchet.initializeAlice(
+                ratchetRoot(pskKey, pair[0], pair[1]), myPriv, peerDetPub,
+                ratchetAd(pair[0], pair[1]));
+        s.dhPublic = Curve25519.derivePublicKey(myPriv);
+        return new RatchetPeer(s);
+    }
+
+    /** Receiver: own deterministic key against the DH from the header. */
+    static RatchetPeer initReceiver(byte[] pskKey, String selfNick,
+                                    String peerNick, byte[] receivedDh) {
+        String[] pair = orderedPair(selfNick, peerNick);
+        String self = lower(selfNick);
+        String myRole = self.equals(pair[0]) ? "lo" : "hi";
+        byte[] myPriv = detPrivate(pskKey, pair[0], pair[1], myRole);
+        DoubleRatchet.Session s = DoubleRatchet.initializeBob(
+                ratchetRoot(pskKey, pair[0], pair[1]), myPriv, receivedDh,
+                ratchetAd(pair[0], pair[1]));
+        s.dhPublic = Curve25519.derivePublicKey(myPriv);
+        return new RatchetPeer(s);
+    }
+
+    /**
+     * Encrypt one text for a private-chat peer. Returns the wire payloads
+     * ("E2E:2:..." PRIVMSG trailing parts, chunked like v1).
+     */
+    public static String[] encodeV2(RatchetState state, byte[] pskKey,
+                                    String selfNick, String peerNick,
+                                    String target, byte kind, String text) {
+        if (state == null || pskKey == null || pskKey.length != 32
+                || selfNick == null || peerNick == null
+                || target == null || text == null) {
+            return new String[0];
+        }
+        String folded = lower(peerNick);
+        RatchetPeer p = state.peer(folded);
+        if (p == null) {
+            p = initSender(pskKey, selfNick, peerNick);
+            state.put(folded, p);
+        }
+        String[] parts = splitText(text, maxPlaintextBytes(target.length(), V2_OVERHEAD));
+        String[] payloads = new String[parts.length];
+        byte[] msgAd = aad(selfNick, target);
+        for (int i = 0; i < parts.length; i++) {
+            String chunk = parts[i];
+            if (parts.length > 1) {
+                chunk = "[" + (i + 1) + "/" + parts.length + "] " + chunk;
+            }
+            byte[] body = Utf8.encode(chunk);
+            byte[] pt = new byte[body.length + 1];
+            pt[0] = kind;
+            System.arraycopy(body, 0, pt, 1, body.length);
+            payloads[i] = PREFIX_V2 + Sasl.encodeBase64(frameV2(p, pt, msgAd));
+        }
+        return payloads;
+    }
+
+    /** Encrypt one chunk under the peer session, framed with our current DH. */
+    static byte[] frameV2(RatchetPeer p, byte[] pt, byte[] msgAd) {
+        if (p.sendRatchetNeeded) {
+            DoubleRatchet.ratchetEncrypt(p.session);
+            p.sendRatchetNeeded = false;
+        }
+        byte[] inner = DoubleRatchet.encrypt(p.session, pt, msgAd);
+        byte[] framed = new byte[32 + inner.length];
+        System.arraycopy(p.session.dhPublic, 0, framed, 0, 32);
+        System.arraycopy(inner, 0, framed, 32, inner.length);
+        return framed;
+    }
+
+    /**
+     * Decrypt an inbound v2 body, healing a desynced session (peer restart)
+     * with exactly one PSK re-init retry.
+     */
+    public static Plain decodeV2(RatchetState state, byte[] pskKey,
+                                 String selfNick, String peerNick,
+                                 String target, String text) {
+        if (state == null || pskKey == null || pskKey.length != 32
+                || !isE2eV2(text) || target == null) {
+            return null;
+        }
+        byte[] blob = Sasl.decodeBase64(text.substring(PREFIX_V2.length()));
+        if (blob == null || blob.length < V2_MIN_BLOB) {
+            return null;
+        }
+        if (blob.length - 32 > MAX_PLAINTEXT + 16 + 4 + 64) {
+            return null; // absurdly large: refuse rather than buffer
+        }
+        String folded = lower(peerNick);
+        byte[] msgAd = aad(peerNick, target);
+        RatchetPeer p = state.peer(folded);
+        if (p == null) {
+            p = initReceiver(pskKey, selfNick, peerNick, slice(blob, 0, 32));
+            state.put(folded, p);
+        }
+        byte[] pt = decryptV2(p, blob, msgAd);
+        if (pt == null) {
+            // Maybe the peer restarted into a fresh session: exactly one
+            // retry from the PSK. Only a key holder can make this succeed.
+            RatchetPeer fresh = initReceiver(pskKey, selfNick, peerNick,
+                    slice(blob, 0, 32));
+            pt = decryptV2(fresh, blob, msgAd);
+            if (pt == null) {
+                return null;
+            }
+            state.put(folded, fresh);
+            p = fresh;
+        }
+        if (pt.length < 1) {
+            return null;
+        }
+        byte kind = pt[0];
+        if (kind != KIND_CHAT && kind != KIND_ACTION) {
+            return null;
+        }
+        return new Plain(kind, Utf8.decode(pt, 1, pt.length - 1));
+    }
+
+    /** DH-step when the header carries a new public, then decrypt. */
+    static byte[] decryptV2(RatchetPeer p, byte[] framed, byte[] msgAd) {
+        byte[] dh = slice(framed, 0, 32);
+        byte[] inner = slice(framed, 32, framed.length - 32);
+        if (!equalBytes(dh, p.session.theirDhPublic)) {
+            DoubleRatchet.ratchetDecrypt(p.session, dh);
+            p.sendRatchetNeeded = true;
+        }
+        return DoubleRatchet.decrypt(p.session, inner, msgAd);
+    }
+
+    private static byte[] slice(byte[] b, int off, int len) {
+        byte[] out = new byte[len];
+        System.arraycopy(b, off, out, 0, len);
+        return out;
+    }
+
+    private static boolean equalBytes(byte[] a, byte[] b) {
+        if (a == null || b == null || a.length != b.length) {
+            return false;
+        }
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 }

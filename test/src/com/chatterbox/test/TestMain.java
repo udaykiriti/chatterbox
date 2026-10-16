@@ -20,7 +20,8 @@ public final class TestMain {
         CryptoTest.class,
         X25519Test.class,
         SecurityTest.class,
-        E2ETest.class
+        E2ETest.class,
+        RatchetTest.class
     };
 
     public static void main(String[] args) {

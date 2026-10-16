@@ -302,6 +302,83 @@ public final class E2ETest extends TestCase {
         assertTrue(listener.lastMessage.text.startsWith("[E2E]"));
     }
 
+    // ---- Session v2 (ratcheted private chat) ----
+
+    private static ServerState newPeerServer(String nick) {
+        ServerState s = new ServerState("t", "irc.test", 6697, true);
+        s.setNick(nick);
+        s.setSelfNick(nick);
+        s.setE2eOn(true);
+        s.setE2eKey(PASSPHRASE);
+        return s;
+    }
+
+    public void testSessionV2PrivateChatRoundTrip() {
+        ServerState sa = newPeerServer("alice");
+        ServerState sb = newPeerServer("bob");
+        CaptureListener la = new CaptureListener();
+        CaptureListener lb = new CaptureListener();
+        Session alice = new Session(sa, new RecordingSender());
+        Session bob = new Session(sb, new RecordingSender());
+        alice.setListener(la);
+        bob.setListener(lb);
+
+        // Alice -> Bob: v2 envelope on the wire...
+        String[] out = alice.e2eEncode("bob", E2E.KIND_CHAT, "hello ratchet");
+        assertEquals(1, out.length);
+        assertTrue(out[0].startsWith("E2E:2:"));
+        bob.feedLine(":alice!a@h PRIVMSG bob :" + out[0]);
+        assertNotNull(lb.lastMessage);
+        assertEquals("hello ratchet", lb.lastMessage.text);
+
+        // ...Bob -> Alice exercises the DH step the other way.
+        String[] back = bob.e2eEncode("alice", E2E.KIND_CHAT, "hi back");
+        alice.feedLine(":bob!b@h PRIVMSG alice :" + back[0]);
+        assertNotNull(la.lastMessage);
+        assertEquals("hi back", la.lastMessage.text);
+    }
+
+    public void testSessionV2ChannelStaysV1() {
+        ServerState sa = newPeerServer("alice");
+        Session alice = new Session(sa, new RecordingSender());
+        String[] out = alice.e2eEncode("#chan", E2E.KIND_CHAT, "group chat");
+        assertEquals(1, out.length);
+        assertTrue("channels stay on v1 PSK: " + out[0],
+                out[0].startsWith("E2E:1:"));
+    }
+
+    public void testSessionV2SelfEchoDropped() {
+        ServerState sa = newPeerServer("alice");
+        CaptureListener la = new CaptureListener();
+        Session alice = new Session(sa, new RecordingSender());
+        alice.setListener(la);
+        String[] out = alice.e2eEncode("bob", E2E.KIND_CHAT, "echo me");
+        alice.feedLine(":alice!a@h PRIVMSG alice :" + out[0]);
+        assertNull("own v2 echo must not duplicate the local echo",
+                la.lastMessage);
+    }
+
+    public void testSessionV2HealsAfterPeerRestart() {
+        ServerState sa = newPeerServer("alice");
+        Session alice = new Session(sa, new RecordingSender());
+        CaptureListener lb = new CaptureListener();
+        Session bob = new Session(newPeerServer("bob"), new RecordingSender());
+        bob.setListener(lb);
+
+        String[] p1 = alice.e2eEncode("bob", E2E.KIND_CHAT, "one");
+        bob.feedLine(":alice!a@h PRIVMSG bob :" + p1[0]);
+        assertEquals("one", lb.lastMessage.text);
+
+        // Bob restarts: fresh Session, same passphrase.
+        lb.lastMessage = null;
+        bob = new Session(newPeerServer("bob"), new RecordingSender());
+        bob.setListener(lb);
+        String[] p2 = alice.e2eEncode("bob", E2E.KIND_CHAT, "two");
+        bob.feedLine(":alice!a@h PRIVMSG bob :" + p2[0]);
+        assertNotNull("restart must self-heal", lb.lastMessage);
+        assertEquals("two", lb.lastMessage.text);
+    }
+
     // ---- CommandProcessor: uses sendE2e when active ----
 
     public void testCommandProcessorEncryptsSendLine() {

@@ -65,6 +65,8 @@ public final class Session {
     private E2E e2eCipher;
     private String e2eKeySeed;
     private byte[] e2eKeyBytes;
+    /** Per-peer ratchet sessions for v2 private chats. Fresh per launch. */
+    private final E2E.RatchetState ratchet = new E2E.RatchetState();
 
     public Session(ServerState server, Sender sender) {
         this.server = server;
@@ -341,6 +343,31 @@ public final class Session {
             return;
         }
 
+        // E2E v2 payload (ratcheted private chat): decrypt before anything
+        // else touches the text. Own echoes are dropped: the send path
+        // already posted a plaintext echo, and re-injecting it would show a
+        // duplicate and pollute the receiving chain.
+        if (E2E.isE2eV2(text)) {
+            if (isSelf) {
+                return;
+            }
+            byte[] key = e2eKey();
+            if (key == null) {
+                deliver(in, target, from,
+                        "[E2E] encrypted message (no key set - see Settings)", kind, notice, isSelf);
+                return;
+            }
+            E2E.Plain p = E2E.decodeV2(ratchet, key, server.getSelfNick(), from, target, text);
+            if (p == null) {
+                deliver(in, target, from,
+                        "[E2E] encrypted message could not be decrypted", kind, notice, isSelf);
+                return;
+            }
+            deliver(in, target, from, p.text,
+                    p.kind == E2E.KIND_ACTION ? Message.ACTION : kind, notice, isSelf);
+            return;
+        }
+
         // E2E payload: decrypt before anything else touches the text.
         if (E2E.isE2e(text)) {
             byte[] key = e2eKey();
@@ -403,9 +430,19 @@ public final class Session {
     /**
      * Encrypt one outbound text for a target. Returns the PRIVMSG trailing
      * payload(s) to send; empty when E2E is off.
+     *
+     * Private chats use the v2 ratchet (peer = target nick); channels have
+     * no fan-out primitive on IRC and stay on v1 pre-shared-key.
      */
     public synchronized String[] e2eEncode(String target, byte kind, String text) {
-        if (!server.isE2eReady() || e2eKey() == null || e2eCipher == null) {
+        if (!server.isE2eReady() || e2eKey() == null) {
+            return new String[0];
+        }
+        if (target != null && !isChannelName(target)) {
+            return E2E.encodeV2(ratchet, e2eKeyBytes, server.getSelfNick(),
+                    target, target, kind, text);
+        }
+        if (e2eCipher == null) {
             return new String[0];
         }
         return e2eCipher.encode(target, kind, text);
