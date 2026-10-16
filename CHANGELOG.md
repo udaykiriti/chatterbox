@@ -85,6 +85,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
   device language level 1.3 / class level 1.1; gateway verified live
   (auth reject, TLS relay to Libera.Chat, `/healthz`)
 
+### Added
+- Double Ratchet (v2) end-to-end encryption for private chats: same
+  passphrase bootstrap, no handshake — first speaker uses fresh DH against
+  the peer's deterministic key, DH carried in the `E2E:2:` header so replies
+  DH-ratchet forward; forward secrecy from the first reply, restart
+  self-heals via one PSK retry, out-of-order past 1000 dropped, forged-gap
+  DoS capped; channels stay on v1 PSK (no IRC fan-out primitive); v1 still
+  decodes; `/theme <dark|light|high|amber>` command; 17 new tests (255 green)
+
 ---
 
 ## [1.2.0] - 2024-01-15

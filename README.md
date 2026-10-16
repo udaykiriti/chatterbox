@@ -11,7 +11,7 @@ end-to-end encryption and a companion TLS gateway for modern networks.
 ![platform](https://img.shields.io/badge/platform-Java_ME-orange?style=for-the-badge)
 ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue?style=for-the-badge)
 ![CLDC](https://img.shields.io/badge/CLDC-1.1-green?style=for-the-badge)
-![tests](https://img.shields.io/badge/tests-238_passing-brightgreen?style=for-the-badge)
+![tests](https://img.shields.io/badge/tests-255_passing-brightgreen?style=for-the-badge)
 ![jar](https://img.shields.io/badge/JAR-<300KB-purple?style=for-the-badge)
 ![python](https://img.shields.io/badge/python-3.11+-yellow?style=for-the-badge)
 ![license](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
@@ -36,6 +36,7 @@ end-to-end encryption and a companion TLS gateway for modern networks.
 | **UI (LCDUI + Canvas)** | Server/channel list with badges, word-wrapped chat canvas with scrollback (up/down), nick colours, timestamps toggle, highlight on own nick, inline input with Tab nick completion, wrap-around search with match feedback, softkey menus, vibrate+beep on mention/PM |
 | **Commands** | `/join` `/part` `/msg` `/me` `/nick` `/topic` `/quit` `/query` `/whois` `/clear` `/away` `/back` `/cycle` `/names` `/kick` `/mode` `/who` `/raw` `/e2e` `/theme` `/help` `/close` |
 | **E2E (pre-shared-key)** | ChaCha20-Poly1305 (RFC 8439) from a per-profile passphrase set in Settings, `/e2e` status + key fingerprint (`12AB CD34 EF56 78CD`) to verify peers, AAD bound to sender+target, long texts auto-chunked, unreadable payloads render as placeholders |
+| **E2E ratchet (private chats)** | Double Ratchet over the same passphrase — no handshake, first speaker generates fresh DH against the peer's deterministic key; forward secrecy from the first reply, restart self-heals, `E2E:2:` wire format, v1 still decodes; channels stay on v1 (no IRC fan-out primitive) |
 | **Robustness** | All I/O in try/catch, malformed lines never crash, backgrounding via pauseApp/startApp keeps socket alive, clean QUIT on exit |
 | **Extras** | Local RMS scrollback log with term filter, URL detection, 4 themes (Dark / Light / High-contrast / Amber), < 300 KB JAR |
 
@@ -47,7 +48,7 @@ Every push and pull request runs five workflows:
 
 | Workflow | What it proves |
 |----------|----------------|
-| **CI** | `javac` compile of stubs + app + tests, then the full **238-test** suite on JDK 21; gateway syntax check on Python 3.12 |
+| **CI** | `javac` compile of stubs + app + tests, then the full **255-test** suite on JDK 21; gateway syntax check on Python 3.12 |
 | **Gateway functional test** | Boots the real gateway against a self-signed-TLS fake ircd: auth reject, greeting relay, PONG upstream, NICK/USER relay, PRIVMSG echo round-trip, `/healthz` |
 | **Docs build check** | Strict `mkdocs build` so documentation changes can never break the site |
 | **Emulator boot test** | Compiles with ECJ, packages JAR/JAD, and boots the MIDlet headless (MicroEmulator `-Xautotest` under Xvfb) — guards the startup-crash class of bug |

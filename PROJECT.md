@@ -1,6 +1,6 @@
 # Chatterbox — MIDP 2.0 IRC Client with E2E Encryption
 
-**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 238 passing unit tests.**
+**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 255 passing unit tests.**
 
 ---
 
@@ -11,7 +11,7 @@ chatterbox/
 ├── midlet/src/com/chatterbox/
 │   ├── proto/      # Protocol layer (zero UI deps) — IrcParser, IrcCodec, LineReader, Ctcp, Cap, Sasl, Dcc, Format, IrcSanitizer
 │   ├── core/       # Session state, commands, crypto integration — Session, SessionManager, ChannelState, MessageRing, CommandProcessor, IgnoreList, HighlightRules, ServiceIdentify, AutoAway, WhoisCache, MessageHistory
-│   ├── crypto/     # E2E primitives — E2E (pre-shared-key codec), ChaCha20, Poly1305, ChaCha20Poly1305, HKDF, SHA256, Curve25519 & DoubleRatchet (roadmap)
+│   ├── crypto/     # E2E primitives — E2E (PSK codec + v2 ratchet), ChaCha20, Poly1305, ChaCha20Poly1305, HKDF, SHA256, Curve25519 & DoubleRatchet
 │   ├── net/        # Network — IrcConnection, SocketFactory, FloodQueue, ConnectionConfig
 │   ├── rms/        # Persistence — ProfileStore, Profile, LogStore, RmsStore, PasswordObfuscator
 │   └── ui/         # LCDUI screens — ChatterboxMIDlet, ChatCanvas, ChatView, ServerListScreen, SettingsScreen, NickListScreen, ChannelListScreen, QuickConnect, LogViewer, Notifier, InputLine, NickComplete, ServiceScreen, HighlightScreen, IgnoreScreen, UrlHandler
@@ -19,7 +19,7 @@ chatterbox/
 │   ├── server.py   # Asyncio TLS relay with password auth, rate limiting
 │   ├── Dockerfile  # Container build
 │   └── deploy/     # systemd unit
-├── test/           # 238 unit tests (JUnit 3 shim, no external deps)
+├── test/           # 255 unit tests (JUnit 3 shim, no external deps)
 │   ├── shim/       # Minimal JUnit 3 clone
 │   └── src/
 ├── build.xml       # Ant: compile → preverify → ProGuard → JAR/JAD
@@ -91,7 +91,7 @@ javac -encoding UTF-8 -cp build/classes -d build/tests $(find test/shim test/src
 java -cp build/classes:build/tests com.chatterbox.test.TestMain
 ```
 
-**Expected:** `✔ 238 tests, all green`
+**Expected:** `✔ 255 tests, all green`
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
@@ -101,7 +101,8 @@ java -cp build/classes:build/tests com.chatterbox.test.TestMain
 | CryptoTest | 21 | HKDF, HMAC-SHA256, SHA256, RFC 8439 vectors (ChaCha20, Poly1305, AEAD) |
 | X25519Test | 9 | RFC 7748 vectors, DH, non-canonical input handling |
 | SecurityTest | 29 | IrcSanitizer, PasswordObfuscator |
-| E2ETest | 28 | Pre-shared-key E2E codec, session + command integration |
+| E2ETest | 32 | Pre-shared-key E2E codec, v2 ratchet sessions, command integration |
+| RatchetTest | 13 | Double Ratchet lib flow, v2 codec, heal, tamper/gap rejection |
 
 ---
 
@@ -223,7 +224,8 @@ sudo systemctl enable --now chatterbox-gateway
 | **Nonce** | SHA-256(key‖nick‖counter)[0..12]; counter seeded from epoch seconds, monotonic |
 | **AAD Binding** | `cb-e2e-v1\|<sender>\|<target>` — stops cross-channel reuse of payloads |
 | **Key Fingerprint** | SHA-256(key) → first 64 bits as `12AB CD34 EF56 78CD`, shown by `/e2e`; peers compare out of band |
-| **Wire Format** | `E2E:1:<base64(nonce ‖ ciphertext ‖ tag)>` in a normal PRIVMSG |
+| **Wire Format** | `E2E:1:<base64(nonce ‖ ciphertext ‖ tag)>` in a normal PRIVMSG; v2 ratchet `E2E:2:<base64(DH ‖ N ‖ ciphertext ‖ tag)>` in private chats |
+| **Ratchet (PM only)** | Double Ratchet bootstrapped from the PSK, no handshake: first speaker uses fresh DH vs the peer's deterministic key; forward secrecy from the first reply; restarts self-heal via one PSK retry; out-of-order past 1000 dropped; channels stay v1 |
 | **Hash** | SHA-256 (FIPS 180-4) |
 | **SASL** | PLAIN / EXTERNAL |
 
@@ -235,8 +237,9 @@ sudo systemctl enable --now chatterbox-gateway
    tag renders a placeholder instead of crashing
 5. Malformed payloads (`E2E:` junk, bad base64) are rejected cleanly
 
-**Roadmap (library code present, not wired):** X3DH-style handshake over
-Curve25519 (RFC 7748) and a Signal Double Ratchet for forward/future secrecy.
+**Roadmap:** X3DH-style handshake over
+Curve25519 (RFC 7748) for future secrecy; the Double Ratchet above already
+gives forward secrecy in private chats.
 
 ---
 
