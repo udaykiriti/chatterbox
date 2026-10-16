@@ -1,0 +1,28 @@
+name: Emulator boot test
+
+on:
+  push:
+    branches: [main]
+    paths: ['midlet/**', 'stub/**', '.github/emulator-boot-test.sh',
+            '.github/workflows/emulator-boot.yml']
+  pull_request:
+    branches: [main]
+    paths: ['midlet/**', 'stub/**', '.github/emulator-boot-test.sh',
+            '.github/workflows/emulator-boot.yml']
+
+jobs:
+  boot:
+    name: Headless MIDlet boot (MicroEmulator autotest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Boot test
+        run: bash .github/emulator-boot-test.sh
+        timeout-minutes: 10
