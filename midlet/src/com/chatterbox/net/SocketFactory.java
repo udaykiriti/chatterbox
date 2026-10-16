@@ -5,7 +5,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 import javax.microedition.io.Connector;
-import javax.microedition.io.SecurityConnection;
+import javax.microedition.io.SecureConnection;
 import javax.microedition.io.SocketConnection;
 
 import com.chatterbox.core.ServerState;
@@ -24,9 +24,10 @@ import com.chatterbox.core.ServerState;
  *    sockets. A black-holed TCP connect blocks the calling thread until the
  *    handset's own TCP timeout (often 2-3 minutes). That is why IrcConnection
  *    runs the connect attempt on its own thread and never on the MIDlet thread.
- *  - getSocketConnection().setSocketTimeout() DOES exist (since MIDP 2.0 / CLDC
- *    1.1's javax.microedition.io.SocketConnection) and takes milliseconds; it
- *    applies to the InputStream read, and we use it for the keepalive path.
+ *  - The spec SocketConnection has setSocketOption() (MIDP 2.0) with TCP
+ *    options only; there is NO read timeout. We set KEEPALIVE when the
+ *    caller wants a timeout so dead peers surface via the OS instead of
+ *    blocking a read forever.
  *  - "ssl://" needs the hostname to match the certificate. On S60 3rd edition
  *    (E63/E71/C3) the TLS root store is small and often lacks the modern CA
  *    bundle, so failures are common and expected; we always fall back.
@@ -162,13 +163,15 @@ public final class SocketFactory {
         SocketConnection sc = (SocketConnection) c;
         Opened o = new Opened();
         o.socket = sc;
-        o.secure = secure && (c instanceof SecurityConnection);
+        o.secure = secure && (c instanceof SecureConnection);
         try {
             if (readTimeoutMs > 0) {
-                sc.setSocketTimeout(readTimeoutMs);
+                // Spec has no read timeout; TCP keepalive is the closest
+                // supported equivalent for spotting dead peers.
+                sc.setSocketOption(SocketConnection.KEEPALIVE, 1);
             }
-            o.in = sc.getInputStream();
-            o.out = sc.getOutputStream();
+            o.in = sc.openInputStream();
+            o.out = sc.openOutputStream();
         } catch (IOException e) {
             try {
                 sc.close();

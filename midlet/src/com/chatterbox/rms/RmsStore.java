@@ -6,22 +6,36 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
+import javax.microedition.rms.RecordEnumeration;
 import javax.microedition.rms.RecordStore;
 import javax.microedition.rms.RecordStoreException;
 
 /**
- * Thin, crash-tolerant wrapper over RecordStore.
+ * Thin, crash-tolerant wrapper over the MIDP 2.0 RecordStore API.
  *
- * Assumptions and firmware notes:
- *  - RecordStore.listStores() can throw if storage was removed mid-session.
- *    Everything here is wrapped so a corrupt store degrades to "no settings"
- *    rather than crashing the MIDlet on startApp.
- *  - We never trust a stored length. Every read validates that the byte count
- *    matches what the decoder is about to consume, because a truncated write
- *    (battery pull mid-save) is common on these devices and DataInputStream
- *    will happily throw EOFException deep inside a decoder.
- *  - Storage names are hashed-free and short; some S60 builds cap a record at
- *    32 KB.
+ * Real RMS assigns record ids sequentially, so a caller cannot place a
+ * record under an arbitrary key (this store's callers use stable logical
+ * ids: 0..2 for magic/prefs/index and 1000 + slot for profiles). The
+ * logical-id API is preserved by prefixing every stored record with its
+ * logical id:
+ *
+ *   record bytes: [int logicalId][payload...]
+ *
+ * Reads enumerate the store and match on the prefix. Stores here are tiny
+ * (a handful of records), so the linear scan is cheap. Record ids are never
+ * reused after deleteRecord and payload rewrites happen in place, so a
+ * stable record never moves.
+ *
+ * Notes that matter on real devices:
+ *  - RecordStore.listRecordStores() can return null or throw if storage was
+ *    removed mid-session. Everything here is wrapped so a corrupt store
+ *    degrades to "no settings" rather than crashing the MIDlet on startApp.
+ *  - We never trust a stored length. Every read validates that the byte
+ *    count matches what the decoder is about to consume, because a
+ *    truncated write (battery pull mid-save) is common on these devices and
+ *    DataInputStream will happily throw EOFException deep inside a decoder.
+ *  - Each call opens and closes the store; long-lived open handles were the
+ *    main source of startup crashes on old firmware.
  */
 public final class RmsStore {
 
@@ -37,14 +51,10 @@ public final class RmsStore {
         return name;
     }
 
-    public RecordStore open() throws RecordStoreException {
-        return RecordStore.open(name, true);
-    }
-
     public boolean exists() {
         RecordStore rs = null;
         try {
-            rs = RecordStore.open(name, false);
+            rs = RecordStore.openRecordStore(name, false);
             return true;
         } catch (RecordStoreException e) {
             return false;
@@ -54,20 +64,17 @@ public final class RmsStore {
     }
 
     public void delete() {
-        RecordStore rs = null;
         try {
-            rs = RecordStore.open(name, true);
-            rs.deleteAllRecords();
+            RecordStore.deleteRecordStore(name);
         } catch (RecordStoreException e) {
             // Nothing to delete is a success for our purposes.
-        } finally {
-            closeQuietly(rs);
         }
     }
 
     public String[] list() {
         try {
-            return RecordStore.listStores();
+            String[] out = RecordStore.listRecordStores();
+            return out == null ? new String[0] : out;
         } catch (Throwable t) {
             return new String[0];
         }
@@ -75,17 +82,27 @@ public final class RmsStore {
 
     /** @return the payload, or null when absent or unreadable. */
     public byte[] read(long id) {
+        if (!fitsInt(id)) {
+            return null;
+        }
         RecordStore rs = null;
         try {
-            rs = open();
-            if (!rs.recordExists(id)) {
-                return null;
+            rs = RecordStore.openRecordStore(name, false);
+            RecordEnumeration en = rs.enumerateRecords(null, null, false);
+            try {
+                while (en.hasNextElement()) {
+                    int recId = en.nextRecordId();
+                    byte[] rec = rs.getRecord(recId);
+                    if (rec != null && rec.length >= 4 && readInt(rec, 0) == (int) id) {
+                        byte[] out = new byte[rec.length - 4];
+                        System.arraycopy(rec, 4, out, 0, out.length);
+                        return out;
+                    }
+                }
+            } finally {
+                en.destroy();
             }
-            byte[] data = rs.getRecord(id);
-            if (data == null || data.length > MAX_RECORD_BYTES) {
-                return null;
-            }
-            return data;
+            return null;
         } catch (Throwable t) {
             return null;
         } finally {
@@ -95,17 +112,28 @@ public final class RmsStore {
 
     /** @return true on success. A failed write leaves the old record intact. */
     public boolean write(long id, byte[] data) {
-        if (data == null || data.length > MAX_RECORD_BYTES) {
+        if (data == null || data.length > MAX_RECORD_BYTES || !fitsInt(id)) {
             return false;
         }
         RecordStore rs = null;
         try {
-            rs = open();
-            if (rs.recordExists(id)) {
-                rs.setRecord(id, data);
-            } else {
-                rs.addRecord(id, data);
+            rs = RecordStore.openRecordStore(name, true);
+            byte[] framed = withPrefix((int) id, data);
+            // Rewrite the record in place when one with this logical id exists.
+            RecordEnumeration en = rs.enumerateRecords(null, null, false);
+            try {
+                while (en.hasNextElement()) {
+                    int recId = en.nextRecordId();
+                    byte[] rec = rs.getRecord(recId);
+                    if (rec != null && rec.length >= 4 && readInt(rec, 0) == (int) id) {
+                        rs.setRecord(recId, framed, 0, framed.length);
+                        return true;
+                    }
+                }
+            } finally {
+                en.destroy();
             }
+            rs.addRecord(framed, 0, framed.length);
             return true;
         } catch (Throwable t) {
             return false;
@@ -115,13 +143,26 @@ public final class RmsStore {
     }
 
     public boolean remove(long id) {
+        if (!fitsInt(id)) {
+            return false;
+        }
         RecordStore rs = null;
         try {
-            rs = open();
-            if (rs.recordExists(id)) {
-                rs.deleteRecord(id);
+            rs = RecordStore.openRecordStore(name, false);
+            RecordEnumeration en = rs.enumerateRecords(null, null, false);
+            try {
+                while (en.hasNextElement()) {
+                    int recId = en.nextRecordId();
+                    byte[] rec = rs.getRecord(recId);
+                    if (rec != null && rec.length >= 4 && readInt(rec, 0) == (int) id) {
+                        rs.deleteRecord(recId);
+                        return true;
+                    }
+                }
+            } finally {
+                en.destroy();
             }
-            return true;
+            return false;
         } catch (Throwable t) {
             return false;
         } finally {
@@ -133,19 +174,58 @@ public final class RmsStore {
     public long[] ids() {
         RecordStore rs = null;
         try {
-            rs = open();
-            String[] names = rs.listRecordIds();
-            long[] out = new long[names.length];
-            for (int i = 0; i < names.length; i++) {
-                out[i] = Long.parseLong(names[i]);
+            rs = RecordStore.openRecordStore(name, false);
+            long[] out = new long[rs.getNumRecords()];
+            int n = 0;
+            RecordEnumeration en = rs.enumerateRecords(null, null, false);
+            try {
+                while (en.hasNextElement()) {
+                    int recId = en.nextRecordId();
+                    byte[] rec = rs.getRecord(recId);
+                    if (rec != null && rec.length >= 4) {
+                        long logical = readInt(rec, 0) & 0xFFFFFFFFL;
+                        boolean seen = false;
+                        for (int i = 0; i < n && !seen; i++) {
+                            seen = out[i] == logical;
+                        }
+                        if (!seen) {
+                            out[n++] = logical;
+                        }
+                    }
+                }
+            } finally {
+                en.destroy();
             }
-            bubbleSort(out);
-            return out;
+            long[] exact = new long[n];
+            System.arraycopy(out, 0, exact, 0, n);
+            bubbleSort(exact);
+            return exact;
         } catch (Throwable t) {
             return new long[0];
         } finally {
             closeQuietly(rs);
         }
+    }
+
+    // ---- logical-id framing ----
+
+    private static boolean fitsInt(long v) {
+        return v >= 0 && v <= 0x7FFFFFFFL && v == (long) (int) v;
+    }
+
+    private static int readInt(byte[] b, int off) {
+        return ((b[off] & 0xFF) << 24) | ((b[off + 1] & 0xFF) << 16)
+                | ((b[off + 2] & 0xFF) << 8) | (b[off + 3] & 0xFF);
+    }
+
+    private static byte[] withPrefix(int id, byte[] data) {
+        byte[] framed = new byte[data.length + 4];
+        framed[0] = (byte) (id >>> 24);
+        framed[1] = (byte) (id >>> 16);
+        framed[2] = (byte) (id >>> 8);
+        framed[3] = (byte) id;
+        System.arraycopy(data, 0, framed, 4, data.length);
+        return framed;
     }
 
     private static void bubbleSort(long[] a) {
@@ -165,7 +245,7 @@ public final class RmsStore {
             return;
         }
         try {
-            rs.close();
+            rs.closeRecordStore();
         } catch (Throwable t) {
             // Ignored on purpose.
         }
