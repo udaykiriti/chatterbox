@@ -892,9 +892,15 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
                     searchTerm = tb.getString();
                     view.setSearch(searchTerm);
                     int idx = view.findNext(searchTerm, topLine + 1);
+                    if (idx < 0) {
+                        // Wrap to the top before giving up.
+                        idx = view.findNext(searchTerm, 0);
+                    }
                     if (idx >= 0) {
                         topLine = Math.max(0, idx - view.getVisibleRows() / 2);
                         pinnedToBottom = false;
+                    } else {
+                        midlet.notifyUser("Search", "No match for \"" + searchTerm + "\"");
                     }
                     midletShow();
                 }
@@ -909,10 +915,15 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             return;
         }
         int idx = view.findNext(searchTerm, topLine + view.getVisibleRows());
+        if (idx < 0) {
+            idx = view.findNext(searchTerm, 0);
+        }
         if (idx >= 0) {
             topLine = Math.max(0, idx - view.getVisibleRows() / 2);
             pinnedToBottom = false;
             markDirty();
+        } else {
+            midlet.notifyUser("Search", "No match for \"" + searchTerm + "\"");
         }
     }
 
@@ -922,10 +933,15 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             return;
         }
         int idx = view.findPrev(searchTerm, topLine - 1);
+        if (idx < 0) {
+            idx = view.findPrev(searchTerm, view.getLineCount() - 1);
+        }
         if (idx >= 0) {
             topLine = Math.max(0, idx - view.getVisibleRows() / 2);
             pinnedToBottom = false;
             markDirty();
+        } else {
+            midlet.notifyUser("Search", "No match for \"" + searchTerm + "\"");
         }
     }
 
