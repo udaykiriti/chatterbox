@@ -53,6 +53,38 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
 - Documentation test counts corrected everywhere (README badge, guides, changelog):
   229 tests passing
 
+### Fixed
+- Startup crash in the emulator (`NoSuchMethodError: Form.<init>(String,
+  String[])`): the fatal-error screen, command menu, and all List/ChoiceGroup
+  screens used constructors that exist only in the desktop stubs, not in
+  MIDP 2.0 — fatal on real devices too. All screens migrated to spec
+  constructors; `Notifier` uses `Display.vibrate()` (no `Vibrator` class in
+  MIDP); `SocketFactory` uses `SecureConnection` + `setSocketOption` +
+  `openInput/OutputStream`
+- `RmsStore` rewritten against the spec `RecordStore` API
+  (`openRecordStore`/`enumerateRecords`, sequential ids); logical ids
+  preserved via a 4-byte id prefix per record. The old code called a
+  fictional `RecordStore.open()` and could never persist on a device
+- Desktop stubs aligned with JSR-118 signatures (incl. a working in-memory
+  `RecordStore`); emulator `Choice` constants documented as inverted vs spec
+- Repaint pump thread never restarted after `pause()` (frozen screen after
+  minimise/restore); `ChatView` wrap-cache token could collide on
+  same-second bursts (stale scrollback); `layout()` measured through a stale
+  graphics font
+
+### Changed
+- Render path: cached fonts/metrics/header/prompt, snapshot only on ring
+  advance, single coalesced repaint per event (was two full paints per
+  keystroke/scroll), 500 ms pump while backgrounded
+- Writer thread: adaptive 250 ms/1 s idle sleep, keepalive PING throttled to
+  ≥ 30 s (was re-pinged every tick), one clock read per loop; 4 KB socket
+  reads; integer token-bucket ceil (no FPU); allocation-free
+  `indexOfIgnoreCase`, cached message timestamps, nick-colour memo,
+  pre-folded nick lookup, forward `dumpTo`, lazy `LineReader` vectors
+- Full suite (233 tests) verified green after every change; app compiles at
+  device language level 1.3 / class level 1.1; gateway verified live
+  (auth reject, TLS relay to Libera.Chat, `/healthz`)
+
 ---
 
 ## [1.2.0] - 2024-01-15
