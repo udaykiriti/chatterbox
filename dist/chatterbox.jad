@@ -1,0 +1,9 @@
+MIDlet-Name: Chatterbox
+MIDlet-Version: 1.7
+MIDlet-Vendor: chatterbox
+MIDlet-1: Chatterbox,,com.chatterbox.ui.ChatterboxMIDlet
+MIDlet-Jar-URL: chatterbox.jar
+MIDlet-Jar-Size: 200647
+MIDlet-Description: IRC client for MIDP 2.0 with pre-shared-key E2E
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.0
