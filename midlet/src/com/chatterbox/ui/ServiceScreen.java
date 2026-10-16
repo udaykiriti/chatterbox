@@ -77,13 +77,13 @@ public final class ServiceScreen extends List implements CommandListener {
 
     private void openServiceForm(final ServiceIdentify.Service existing) {
         Form f = new Form(existing == null ? "Add Service" : "Edit Service");
-        TextField name = new TextField("Name", existing == null ? "NickServ" : existing.name, 32, TextField.ANY);
-        TextField pass = new TextField("Password", existing == null ? "" : existing.password, 64, TextField.PASSWORD);
-        TextField acct = new TextField("Account (opt)", existing == null ? "" : existing.account, 32, TextField.ANY);
-        TextField cmd = new TextField("Command", existing == null ? "IDENTIFY" : existing.command, 32, TextField.ANY);
-        ChoiceGroup method = new ChoiceGroup("Method", new String[] { "PRIVMSG", "NOTICE", "QUOTE" }, 1,
+        final TextField name = new TextField("Name", existing == null ? "NickServ" : existing.name, 32, TextField.ANY);
+        final TextField pass = new TextField("Password", existing == null ? "" : existing.password, 64, TextField.PASSWORD);
+        final TextField acct = new TextField("Account (opt)", existing == null ? "" : existing.account, 32, TextField.ANY);
+        final TextField cmd = new TextField("Command", existing == null ? "IDENTIFY" : existing.command, 32, TextField.ANY);
+        final ChoiceGroup method = new ChoiceGroup("Method", new String[] { "PRIVMSG", "NOTICE", "QUOTE" }, 1,
                 ChoiceGroup.EXCLUSIVE);
-        ChoiceGroup enabled = new ChoiceGroup("Enabled", new String[] { "Yes", "No" }, 1,
+        final ChoiceGroup enabled = new ChoiceGroup("Enabled", new String[] { "Yes", "No" }, 1,
                 ChoiceGroup.EXCLUSIVE);
 
         if (existing != null) {

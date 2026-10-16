@@ -99,7 +99,7 @@ public final class AutoAway {
         private long period;
         private TimerTask task;
 
-        public void schedule(TimerTask task, long delay, long period) {
+        public void schedule(final TimerTask task, final long delay, final long period) {
             this.task = task;
             this.period = period;
             running = true;

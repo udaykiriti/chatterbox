@@ -81,12 +81,12 @@ public final class HighlightScreen extends List implements CommandListener {
 
     private void openRuleForm(final HighlightRules.Rule existing) {
         Form f = new Form(existing == null ? "Add Highlight" : "Edit Highlight");
-        TextField pattern = new TextField("Pattern", existing == null ? "" : existing.pattern, 64, TextField.ANY);
-        ChoiceGroup whole = new ChoiceGroup("Whole word", new String[] { "Yes", "No" }, 1,
+        final TextField pattern = new TextField("Pattern", existing == null ? "" : existing.pattern, 64, TextField.ANY);
+        final ChoiceGroup whole = new ChoiceGroup("Whole word", new String[] { "Yes", "No" }, 1,
                 ChoiceGroup.EXCLUSIVE);
-        ChoiceGroup cases = new ChoiceGroup("Case sensitive", new String[] { "Yes", "No" }, 1,
+        final ChoiceGroup cases = new ChoiceGroup("Case sensitive", new String[] { "Yes", "No" }, 1,
                 ChoiceGroup.EXCLUSIVE);
-        ChoiceGroup host = new ChoiceGroup("Match host", new String[] { "Yes", "No" }, 1,
+        final ChoiceGroup host = new ChoiceGroup("Match host", new String[] { "Yes", "No" }, 1,
                 ChoiceGroup.EXCLUSIVE);
         f.append(pattern);
         f.append(whole);

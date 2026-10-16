@@ -67,8 +67,8 @@ public final class IgnoreScreen extends List implements CommandListener {
 
     private void openAddBox() {
         Form f = new Form("Add Ignore");
-        TextField pattern = new TextField("Pattern (use * ?)", "", 64, TextField.ANY);
-        javax.microedition.lcdui.ChoiceGroup type = new javax.microedition.lcdui.ChoiceGroup("Match",
+        final TextField pattern = new TextField("Pattern (use * ?)", "", 64, TextField.ANY);
+        final javax.microedition.lcdui.ChoiceGroup type = new javax.microedition.lcdui.ChoiceGroup("Match",
                 new String[] { "Nick", "Host (user@host)" }, 1,
                 javax.microedition.lcdui.ChoiceGroup.EXCLUSIVE);
         f.append(pattern);
