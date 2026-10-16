@@ -1,6 +1,6 @@
 # Chatterbox — IRC Client for Nokia S60 / Series 40 (MIDP 2.0)
 
-![Chatterbox](https://img.shields.io/badge/platform-Java_ME-orange) ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue) ![CLDC](https://img.shields.io/badge/CLDC-1.1-green) ![Build](https://img.shields.io/badge/build-Ant-yellow) ![Tests](https://img.shields.io/badge/tests-229_passing-brightgreen)
+![Chatterbox](https://img.shields.io/badge/platform-Java_ME-orange) ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue) ![CLDC](https://img.shields.io/badge/CLDC-1.1-green) ![Build](https://img.shields.io/badge/build-Ant-yellow) ![Tests](https://img.shields.io/badge/tests-229_passing-brightgreen) ![CI](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
 
 A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3, etc.) running Symbian S60 3rd/5th Edition or Series 40 3rd/5th Edition. Includes a companion TLS gateway server for networks that require modern TLS.
 
