@@ -1,34 +1,85 @@
-# Chatterbox — IRC Client for Nokia S60 / Series 40 (MIDP 2.0)
+<div align="center">
 
-![Chatterbox](https://img.shields.io/badge/platform-Java_ME-orange) ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue) ![CLDC](https://img.shields.io/badge/CLDC-1.1-green) ![Build](https://img.shields.io/badge/build-Ant-yellow) ![Tests](https://img.shields.io/badge/tests-233_passing-brightgreen) ![CI](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
+# Chatterbox
 
-A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3, etc.) running Symbian S60 3rd/5th Edition or Series 40 3rd/5th Edition. Includes a companion TLS gateway server for networks that require modern TLS.
+### IRC client for Nokia S60 / Series 40 (MIDP 2.0)
+
+A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3)
+running Symbian S60 3rd/5th Edition or Series 40 — with pre-shared-key
+end-to-end encryption and a companion TLS gateway for modern networks.
+
+![platform](https://img.shields.io/badge/platform-Java_ME-orange)
+![MIDP](https://img.shields.io/badge/MIDP-2.0-blue)
+![CLDC](https://img.shields.io/badge/CLDC-1.1-green)
+![tests](https://img.shields.io/badge/tests-235_passing-brightgreen)
+![jar](https://img.shields.io/badge/JAR-<300KB-purple)
+![python](https://img.shields.io/badge/python-3.11+-yellow)
+![license](https://img.shields.io/badge/license-MIT-blue)
+
+![ci](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
+![gateway](https://github.com/udaykiriti/chatterbox/actions/workflows/gateway-test.yml/badge.svg)
+![docs](https://github.com/udaykiriti/chatterbox/actions/workflows/docs.yml/badge.svg)
+![boot](https://github.com/udaykiriti/chatterbox/actions/workflows/emulator-boot.yml/badge.svg)
+![build](https://github.com/udaykiriti/chatterbox/actions/workflows/build.yml/badge.svg)
+
+</div>
 
 ---
 
-##  Features
+## Features
 
 | Area | Details |
 |------|---------|
-| **Network** | Multiple server profiles (RMS), TLS-first with plain fallback via gateway, exponential backoff reconnect (2 s → 60 s), 90 s keepalive PING, lag display |
+| **Network** | Multiple server profiles (RMS), TLS-first with plain fallback via gateway, exponential backoff reconnect (2 s → 60 s), 30 s-throttled keepalive PING, lag display |
 | **Protocol** | Full RFC 2812 parser, PING/PONG, PRIVMSG/NOTICE, JOIN/PART/QUIT/NICK/KICK/MODE/TOPIC, numerics 001/332/353/366/433/401-404/ERROR, CTCP ACTION + VERSION reply |
 | **Session** | Per-channel ring buffer (200 lines), nick lists with modes (@ + % & ~ !), unread/highlight badges, private message tabs |
-| **UI (LCDUI + Canvas)** | Server/channel list with badges, word-wrapped chat canvas with scrollback (↑/↓), nick colours, timestamps toggle, highlight on own nick, inline input with Tab nick completion, softkey menus, vibrate+beep on mention/PM |
+| **UI (LCDUI + Canvas)** | Server/channel list with badges, word-wrapped chat canvas with scrollback (up/down), nick colours, timestamps toggle, highlight on own nick, inline input with Tab nick completion, wrap-around search with match feedback, softkey menus, vibrate+beep on mention/PM |
 | **Commands** | `/join` `/part` `/msg` `/me` `/nick` `/topic` `/quit` `/query` `/whois` `/clear` `/away` `/back` `/cycle` `/names` `/kick` `/mode` `/who` `/raw` `/e2e` `/help` `/close` |
 | **E2E (pre-shared-key)** | ChaCha20-Poly1305 (RFC 8439) from a per-profile passphrase set in Settings, `/e2e` status + key fingerprint (`12AB CD34 EF56 78CD`) to verify peers, AAD bound to sender+target, long texts auto-chunked, unreadable payloads render as placeholders |
 | **Robustness** | All I/O in try/catch, malformed lines never crash, backgrounding via pauseApp/startApp keeps socket alive, clean QUIT on exit |
-| **Extras** | Local RMS scrollback log, URL detection, dark/light themes, < 300 KB JAR |
+| **Extras** | Local RMS scrollback log with term filter, URL detection, 4 themes (Dark / Light / High-contrast / Amber), < 300 KB JAR |
 
 ---
 
-##  Project Structure
+## Continuous Integration
+
+Every push and pull request runs five workflows:
+
+| Workflow | What it proves |
+|----------|----------------|
+| **CI** | `javac` compile of stubs + app + tests, then the full **235-test** suite on JDK 21; gateway syntax check on Python 3.12 |
+| **Gateway functional test** | Boots the real gateway against a self-signed-TLS fake ircd: auth reject, greeting relay, PONG upstream, NICK/USER relay, PRIVMSG echo round-trip, `/healthz` |
+| **Docs build check** | Strict `mkdocs build` so documentation changes can never break the site |
+| **Emulator boot test** | Compiles with ECJ, packages JAR/JAD, and boots the MIDlet headless (MicroEmulator `-Xautotest` under Xvfb) — guards the startup-crash class of bug |
+| **Full build** | Compile, test, package versioned JAR/JAD (tags stamp the version), upload artifacts |
+
+> [!NOTE]
+> The packaged CI artifacts are **not** phone-installable releases: device builds still need
+> WTK `preverify` and ProGuard, which run manually before a device release.
+
+---
+
+## Performance (low-end devices)
+
+Designed for interpreted KVM with ~1 MB heap — no JIT, no FPU:
+
+| Area | Optimization |
+|------|--------------|
+| **Rendering** | Cached fonts/metrics/header, scrollback re-wrapped only on new messages, one coalesced repaint per event, slow pump while backgrounded |
+| **Battery** | Writer thread sleeps 250 ms active / 1 s idle, one clock read per loop, integer token-bucket math |
+| **Memory** | Allocation-free case-insensitive search, cached timestamps, nick-colour memo, forward log dump (was O(n²)) |
+| **E2E cost** | Measured ~13 µs encrypt / ~6 µs decrypt per 200-char message on desktop — low single-digit ms on device hardware, plaintext traffic untouched |
+
+---
+
+## Project Structure
 
 ```
 chatterbox/
 ├── midlet/
 │   └── src/com/chatterbox/
 │       ├── proto/     # Protocol layer (no UI, no MicroEdition) — unit-testable
-│       ├── core/      # Session state, events, string helpers, commands
+│       ├── core/      # Session state, events, string helpers, commands, themes
 │       ├── net/       # Connection, flood control, reconnect logic
 │       ├── rms/       # Profiles, settings, local log (RecordStore)
 │       └── ui/        # LCDUI screens + custom Canvas chat view
@@ -44,8 +95,12 @@ chatterbox/
 │       └── E2ETest.java
 ├── gateway/
 │   ├── server.py      # Python 3.11 asyncio TLS relay
+│   ├── test_gateway.py# Functional relay test (stdlib only)
 │   ├── Dockerfile
 │   └── deploy/chatterbox-gateway.service  # systemd unit
+├── .github/
+│   ├── workflows/     # ci, gateway-test, docs, emulator-boot, build
+│   └── emulator-boot-test.sh  # Headless MIDlet boot test
 ├── stub/              # MIDP/CLDC API stubs for desktop compilation
 ├── build.xml          # Ant build (compile → preverify → ProGuard → JAR/JAD)
 └── README.md          # This file
@@ -53,7 +108,7 @@ chatterbox/
 
 ---
 
-## ️ Build Requirements
+## Build Requirements
 
 | Tool | Version | Purpose |
 |------|---------|---------|
@@ -75,7 +130,7 @@ export KEY_PASS=keypass
 
 ---
 
-## ️ Build Commands
+## Build Commands
 
 ```bash
 # Full release build (clean → compile → preverify → ProGuard → JAR + JAD)
@@ -98,7 +153,7 @@ ant clean
 
 ---
 
-##  Signing for Real Devices
+## Signing for Real Devices
 
 Nokia S60 requires a **Trusted/Manufacturer** certificate for `javax.microedition.io.Connector.ssl` permission. Options:
 
@@ -107,11 +162,13 @@ Nokia S60 requires a **Trusted/Manufacturer** certificate for `javax.microeditio
 3. **Open-signed online** (Symbian Signed) — Service discontinued.
 4. **Developer certificate** — Create with `makecert` + `signtool` from Nokia SDK, install `.cer` on phone via Bluetooth/email, then sign JAR with that cert.
 
-> **Practical workaround:** Use the gateway (plain TCP) and skip device-side TLS. The gateway handles TLS to the IRC network.
+> [!TIP]
+> Practical workaround: use the gateway (plain TCP) and skip device-side TLS.
+> The gateway handles TLS to the IRC network.
 
 ---
 
-##  Installation on Phone
+## Installation on Phone
 
 | Method | Steps |
 |--------|-------|
@@ -132,7 +189,7 @@ Press **Options → Save**, then **Options → Connect**.
 
 ---
 
-##  Gateway Server (TLS Relay)
+## Gateway Server (TLS Relay)
 
 The MIDlet can connect to a **plain TCP gateway** that terminates TLS to the real IRC server. This avoids device-side TLS cert issues.
 
@@ -185,6 +242,15 @@ sudo systemctl enable --now chatterbox-gateway
 | `GATEWAY_LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
 | `GATEWAY_TLS_VERIFY` | `true` | Set `false` for self-signed IRC certs |
 
+### Gateway Functional Test
+
+```bash
+python3 gateway/test_gateway.py
+```
+
+Spins up a self-signed-TLS fake ircd and asserts the full path: auth reject,
+greeting relay, PONG upstream, NICK/USER relay, PRIVMSG echo round-trip, `/healthz`.
+
 ### Phone Side Gateway Config
 
 In the MIDlet **Settings** screen:
@@ -195,26 +261,30 @@ Gateway pass:  your-shared-secret
 ```
 Enable **Use TLS** — the MIDlet will try `ssl://irc.host:6697` first, and **only** fall back to the gateway if that fails.
 
-### ️ Security Note: Gateway vs Direct TLS
+### Security Note: Gateway vs Direct TLS
 - **Direct TLS (ssl://)**: End-to-end encrypted. Passwords sent via SASL PLAIN are base64-encoded (not encrypted) but protected by TLS.
-- **Gateway (plain TCP → TLS relay)**: Your client sends the gateway password in plaintext over TCP. The gateway then opens a TLS connection to the IRC server. Use **only on trusted networks** (your own VPS, home LAN). Enable "Require TLS" in Settings to disable fallback entirely.
+- **Gateway (plain TCP → TLS relay)**: Your client sends the gateway password in plaintext over TCP. The gateway then opens a TLS connection to the IRC server.
+
+> [!WARNING]
+> Use the gateway **only on trusted networks** (your own VPS, home LAN).
+> Enable "Require TLS" in Settings to disable fallback entirely.
 
 ---
 
-## ️ Key Map (Nokia E63/E71/E72/C3)
+## Key Map (Nokia E63/E71/E72/C3)
 
 | Key | Action |
 |-----|--------|
-| **↑ / ↓** | Scroll chat history |
+| **Up / Down** | Scroll chat history |
 | **9 / 8** | Page up / down |
-| **\* (Star) / Green Call** | Send message |
-| **# (Hash)** | Toggle input  scroll focus |
+| **Star / Green Call** | Send message |
+| **Hash** | Toggle input / scroll focus |
 | **1** | Nick list |
 | **2** | Command menu |
 | **3** | Cycle (part + rejoin) |
 | **0** | Toggle topic header |
 | **7** | Toggle timestamps |
-| **← / →** | Move caret in input |
+| **Left / Right** | Move caret in input |
 | **Tab** | Nick completion (cycle) |
 | **C / Clear** | Backspace |
 | **Left Softkey** | Menu (context-sensitive) |
@@ -222,16 +292,19 @@ Enable **Use TLS** — the MIDlet will try `ssl://irc.host:6697` first, and **on
 
 ---
 
-##  Manual Test Checklist
+## Manual Test Checklist
+
+<details>
+<summary>Emulator, real device, and gateway checklists (click to expand)</summary>
 
 ### Emulator (WTK / Nokia S60 SDK)
 - [ ] `ant dist` produces `dist/chatterbox.jar` < 300 KB
-- [ ] `ant test` → **233 tests, all green**
+- [ ] `ant test` → **235 tests, all green**
 - [ ] Launch in emulator: `ant install-emu`
 - [ ] Create profile → Save → Connect → registers (001) → auto-joins channels
 - [ ] Send/receive channel messages, private messages, /me actions
 - [ ] Nick completion (Tab) cycles correctly
-- [ ] Scroll history with ↑/↓, page with 9/8, snap to bottom on new msg
+- [ ] Scroll history with up/down, page with 9/8, snap to bottom on new msg
 - [ ] Highlight badge appears on mention/PM, vibrate+beep triggers
 - [ ] /nick changes nick, /topic sets topic, /whois shows info
 - [ ] /part leaves channel, window marked "parted", auto-rejoin on /cycle
@@ -254,9 +327,11 @@ Enable **Use TLS** — the MIDlet will try `ssl://irc.host:6697` first, and **on
 - [ ] Idle timeout (5 min) closes stale connections
 - [ ] systemd service restarts on crash, logs to journal
 
+</details>
+
 ---
 
-##  Security
+## Security
 
 ### Threat Model
 Chatterbox runs on legacy Java ME devices (Nokia S60/Series 40) with CLDC 1.1 / MIDP 2.0.
@@ -300,13 +375,15 @@ openssl rand -base64 32
 
 ---
 
-##  License
+## License
+
+![license](https://img.shields.io/badge/license-MIT-blue)
 
 MIT License — see `LICENSE` file.
 
 ---
 
-##  Acknowledgements
+## Acknowledgements
 
 - **MIDP/CLDC** — The platform that made mobile Java possible
 - **ProGuard** — For keeping the JAR under 300 KB
@@ -315,4 +392,4 @@ MIT License — see `LICENSE` file.
 
 ---
 
-*Built with  for the love of physical keyboards and IRC.*
+*Built for the love of physical keyboards and IRC.*
