@@ -8,13 +8,13 @@ A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3
 running Symbian S60 3rd/5th Edition or Series 40 — with pre-shared-key
 end-to-end encryption and a companion TLS gateway for modern networks.
 
-![platform](https://img.shields.io/badge/platform-Java_ME-orange)
-![MIDP](https://img.shields.io/badge/MIDP-2.0-blue)
-![CLDC](https://img.shields.io/badge/CLDC-1.1-green)
-![tests](https://img.shields.io/badge/tests-235_passing-brightgreen)
-![jar](https://img.shields.io/badge/JAR-<300KB-purple)
-![python](https://img.shields.io/badge/python-3.11+-yellow)
-![license](https://img.shields.io/badge/license-MIT-blue)
+![platform](https://img.shields.io/badge/platform-Java_ME-orange?style=for-the-badge)
+![MIDP](https://img.shields.io/badge/MIDP-2.0-blue?style=for-the-badge)
+![CLDC](https://img.shields.io/badge/CLDC-1.1-green?style=for-the-badge)
+![tests](https://img.shields.io/badge/tests-235_passing-brightgreen?style=for-the-badge)
+![jar](https://img.shields.io/badge/JAR-<300KB-purple?style=for-the-badge)
+![python](https://img.shields.io/badge/python-3.11+-yellow?style=for-the-badge)
+![license](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 ![ci](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
 ![gateway](https://github.com/udaykiriti/chatterbox/actions/workflows/gateway-test.yml/badge.svg)
@@ -377,7 +377,7 @@ openssl rand -base64 32
 
 ## License
 
-![license](https://img.shields.io/badge/license-MIT-blue)
+![license](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 MIT License — see `LICENSE` file.
 
