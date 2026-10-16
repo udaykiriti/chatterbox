@@ -41,7 +41,7 @@ Access via **Settings** (first run) or **Options → Settings** from main screen
 | **Flood protection** | Checkbox |  On | Client-side message queue (2 msg/2s) |
 | **Scrollback lines** | Number | `200` | Per-channel ring buffer size (50-500) |
 | **Timestamps** | Checkbox |  On | Show `[HH:MM]` in chat |
-| **Theme** | Choice | `Auto` | `Dark` / `Light` / `Auto` (by time) |
+| **Theme** | Choice | `Dark` | `Dark` / `Light` / `High contrast` / `Amber` (also: `/theme <name>`) |
 | **Vibrate on highlight** | Checkbox |  On | Vibrate + beep on mention/PM |
 | **Confirm quit** | Checkbox |  On | Prompt before disconnecting |
 
@@ -106,6 +106,8 @@ Chatterbox-Gateway-Pass: shared-secret
 |-------|------------|------|-----------|---------|-----------|------------|
 | **Dark** | `#000000` | `#FFFFFF` | `#888888` | `#00FF00` | `#FFFF00` | `#FFAA00` |
 | **Light** | `#FFFFFF` | `#000000` | `#888888` | `#0000FF` | `#FF0000` | `#AA5500` |
+| **High contrast** | `#000000` | `#FFFFFF` | `#FFFFFF` | `#00FF00` | black on `#FFFF00` | `#FFFFFF` |
+| **Amber** | `#1A0F00` | `#FFB000` | `#8A6A30` | `#FFFFFF` | `#FFD080` on `#4A2E00` | `#CC7A00` |
 | **Auto** | Time-based | | | | | |
 
 ### Auto Theme Schedule

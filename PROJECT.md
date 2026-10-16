@@ -1,6 +1,6 @@
 # Chatterbox — MIDP 2.0 IRC Client with E2E Encryption
 
-**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 233 passing unit tests.**
+**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 238 passing unit tests.**
 
 ---
 
@@ -19,7 +19,7 @@ chatterbox/
 │   ├── server.py   # Asyncio TLS relay with password auth, rate limiting
 │   ├── Dockerfile  # Container build
 │   └── deploy/     # systemd unit
-├── test/           # 233 unit tests (JUnit 3 shim, no external deps)
+├── test/           # 238 unit tests (JUnit 3 shim, no external deps)
 │   ├── shim/       # Minimal JUnit 3 clone
 │   └── src/
 ├── build.xml       # Ant: compile → preverify → ProGuard → JAR/JAD
@@ -91,13 +91,13 @@ javac -encoding UTF-8 -cp build/classes -d build/tests $(find test/shim test/src
 java -cp build/classes:build/tests com.chatterbox.test.TestMain
 ```
 
-**Expected:** `✔ 233 tests, all green`
+**Expected:** `✔ 238 tests, all green`
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | ProtocolParserTest | 32 | IRC line parsing, CTCP, numerics |
-| CoreTest | 31 | Str, IrcCase, MessageRing, FloodQueue, ChannelState |
-| SessionTest | 83 | Full protocol flow, commands, auto-away, service identify |
+| CoreTest | 33 | Str, IrcCase, MessageRing, FloodQueue, ChannelState |
+| SessionTest | 86 | Full protocol flow, commands, auto-away, service identify |
 | CryptoTest | 21 | HKDF, HMAC-SHA256, SHA256, RFC 8439 vectors (ChaCha20, Poly1305, AEAD) |
 | X25519Test | 9 | RFC 7748 vectors, DH, non-canonical input handling |
 | SecurityTest | 29 | IrcSanitizer, PasswordObfuscator |
@@ -209,6 +209,7 @@ sudo systemctl enable --now chatterbox-gateway
 | `/names` | Channel user list |
 | `/kick nick [reason]` | Kick user |
 | `/raw line` | Send raw IRC |
+| `/theme name` | Switch theme (dark/light/high/amber, persists) |
 | `/help` | Show commands |
 
 ---

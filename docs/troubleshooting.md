@@ -318,7 +318,7 @@ keytool -list -keystore $KEYSTORE -storepass $KEYSTORE_PASS
 | Check | Command/Action |
 |-------|----------------|
 | Build version | `/version` |
-| Test suite | `ant test` (233 pass) |
+| Test suite | `ant test` (238 pass) |
 | JAR size | `ls -lh dist/chatterbox.jar` (< 300 KB) |
 | Gateway logs | `journalctl -u chatterbox-gateway -n 100` |
 | Phone OS | S60 3rd/5th or S40 3rd/5th |

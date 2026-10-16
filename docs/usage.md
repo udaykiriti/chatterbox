@@ -131,7 +131,7 @@ All commands start with `/`. Type in input field and press `*` to send.
 | `/save` | `/save` | Persist settings to RMS |
 | `/reset` | `/reset` | Reset to defaults |
 | `/profile` | `/profile <name>` | Switch profile |
-| `/theme` | `/theme <Dark\|Light\|Auto>` | Change theme |
+| `/theme` | `/theme <dark\|light\|high\|amber>` | Change theme (persists) |
 
 ### Ignore & Highlights
 | Command | Syntax | Description |
@@ -143,7 +143,7 @@ All commands start with `/`. Type in input field and press `*` to send.
 ### Logging & History
 | Command | Syntax | Description |
 |---------|--------|-------------|
-| `/log` | `/log [#channel]` | View scrollback log |
+| `/log` | `/log [#channel]` | View scrollback log (Filter command searches it) |
 | `/clear` | `/clear` | Clear current channel buffer |
 | `/history` | `/history` | Show input history (↑/↓ also works) |
 
@@ -199,6 +199,7 @@ Input: "Hello joh[TAB]" → "Hello johnny "
 - **Channel Info** — `/names` + topic + modes
 - **Nick List** — Open nick list (same as `1` key)
 - **Clear Buffer** — `/clear`
+- **Search** — Find text in scrollback (wraps past both ends, names the term when nothing matches)
 - **View Log** — `/log`
 - **Close Tab** — `/close`
 

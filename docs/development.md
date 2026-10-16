@@ -49,7 +49,7 @@ Guide for developers: building, testing, debugging, and contributing to Chatterb
 ### Run All Tests (Desktop)
 ```bash
 ant test
-# Output: 233 tests, 0 failures
+# Output: 238 tests, 0 failures
 ```
 
 ### Run Single Test Class
@@ -285,12 +285,21 @@ Closes #42
 ```
 
 ### PR Checklist
-- [ ] `ant test` passes (233 tests)
+- [ ] `ant test` passes (238 tests)
 - [ ] `ant clean dist` produces JAR < 300 KB
 - [ ] New code has unit tests (if in proto/core)
 - [ ] No new warnings in build output
 - [ ] Updated relevant documentation
 - [ ] Commit messages follow convention
+
+### CI Workflows (all run on push/PR)
+| Workflow | What it proves |
+|----------|----------------|
+| **CI** | `javac` compile + full test suite on JDK 21, gateway syntax check |
+| **Gateway functional test** | Real gateway vs fake TLS ircd: auth, relay, echo, `/healthz` |
+| **Docs build check** | Strict `mkdocs build` |
+| **Emulator boot test** | Headless MIDlet boot to the server list, zero errors |
+| **Full build** | Compile, test, versioned JAR/JAD artifacts (tags stamp the version) |
 
 ### Areas Welcoming Contributions
 - **Protocol:** IRCv3 support (CAP, batch, labeled-response)
@@ -317,7 +326,7 @@ ant clean dist
 
 # 4. Verify
 ls -lh dist/chatterbox.jar  # < 300 KB
-ant test                    # 233 pass
+ant test                    # 238 pass
 
 # 5. Tag
 git tag -a v1.2.3 -m "Release 1.2.3"
