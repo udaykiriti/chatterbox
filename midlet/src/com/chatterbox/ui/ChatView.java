@@ -6,6 +6,7 @@ import javax.microedition.lcdui.Font;
 import javax.microedition.lcdui.Graphics;
 
 import com.chatterbox.core.Message;
+import com.chatterbox.core.MessageRing;
 import com.chatterbox.core.Str;
 import com.chatterbox.core.Theme;
 
@@ -73,6 +74,9 @@ public final class ChatView {
 
     public void setTheme(Theme t) {
         this.theme = t;
+        // Colours changed: the cached lines carry stale colours, so force the
+        // next layout() to rebuild instead of discarding the whole view.
+        cachedSequence = -1;
     }
 
     public Theme getTheme() {
@@ -134,8 +138,14 @@ public final class ChatView {
     /**
      * Recompute layout for the given canvas size and font. Returns true when the
      * wrapped output had to be rebuilt.
+     *
+     * The ring is snapshotted only when its sequence advanced (or metrics
+     * changed): the old path snapshotted a fresh 200-element array on every
+     * paint, even for a caret blink. The sequence comes straight from the ring,
+     * which also fixes the old time*31+length token that collided when two
+     * same-second bursts had equal length.
      */
-    public boolean layout(Graphics g, int w, int h, Message[] messages) {
+    public boolean layout(Graphics g, int w, int h, MessageRing ring) {
         this.width = w;
         font = g.getFont();
         lineHeight = font.getHeight() + 2;
@@ -148,10 +158,15 @@ public final class ChatView {
                 || !selfNick.equals(cachedSelf));
         this.charWidth = newCharWidth;
         this.visibleRows = newRows;
-        if (metricsChanged) {
-            cachedSequence = -1;
+        long seq = ring == null ? 0 : ring.sequence();
+        if (metricsChanged || seq != cachedSequence) {
+            if (metricsChanged) {
+                cachedSequence = -1;
+            }
+            Message[] messages = ring == null ? null : ring.snapshot();
+            return rebuild(messages, seq);
         }
-        return rebuild(messages);
+        return false;
     }
 
     /**
@@ -173,15 +188,12 @@ public final class ChatView {
         return n < 8 ? 8 : n;
     }
 
-    private boolean rebuild(Message[] messages) {
+    private boolean rebuild(Message[] messages, long seq) {
         if (messages == null || messages.length == 0) {
             lines.removeAllElements();
-            cachedSequence = 0;
+            cachedSequence = seq;
             return true;
         }
-        // Sequence token: MessageRing gives us a monotonically increasing count.
-        long last = messages[messages.length - 1].time;
-        long seq = last * 31 + messages.length;
         if (seq == cachedSequence) {
             return false;
         }
@@ -282,6 +294,7 @@ public final class ChatView {
      */
     public void paint(Graphics g, int top, int rows) {
         g.setFont(font);
+        int baseline = font.getBaselinePosition();
         int y = 0;
         int max = Math.min(lines.size(), top + rows);
         for (int i = top; i < max; i++) {
@@ -292,7 +305,7 @@ public final class ChatView {
             }
             int c = rl.link ? theme.link : rl.color;
             g.setColor(Theme.argb(c));
-            g.drawString(rl.text, 1, y + font.getBaselinePosition(), Graphics.TOP | Graphics.LEFT);
+            g.drawString(rl.text, 1, y + baseline, Graphics.TOP | Graphics.LEFT);
             y += lineHeight;
         }
         g.setColor(Theme.argb(theme.bg));
@@ -325,10 +338,11 @@ public final class ChatView {
         if (term == null || term.length() == 0) {
             return -1;
         }
-        String t = term.toLowerCase();
+        // indexOfIgnoreCase folds inline: the old toLowerCase() per line
+        // allocated a full copy of every scrollback line per search step.
         for (int i = from; i < lines.size(); i++) {
             RenderLine rl = (RenderLine) lines.elementAt(i);
-            if (rl.text.toLowerCase().indexOf(t) >= 0) {
+            if (Str.indexOfIgnoreCase(rl.text, term, 0) >= 0) {
                 return i;
             }
         }
@@ -340,10 +354,9 @@ public final class ChatView {
         if (term == null || term.length() == 0) {
             return -1;
         }
-        String t = term.toLowerCase();
         for (int i = from; i >= 0; i--) {
             RenderLine rl = (RenderLine) lines.elementAt(i);
-            if (rl.text.toLowerCase().indexOf(t) >= 0) {
+            if (Str.indexOfIgnoreCase(rl.text, term, 0) >= 0) {
                 return i;
             }
         }

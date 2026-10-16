@@ -64,6 +64,21 @@ import com.chatterbox.net.IrcConnection;
  */
 public final class ChatCanvas extends Canvas implements Runnable, CommandListener {
 
+    // ---- Key-code aliases (app convention, NOT part of the MIDP API) ----
+    // Real firmwares differ; MicroEmulator's j2se device uses the S60-style
+    // negative codes below. Values must stay in one place so the on-device
+    // checklist can re-baseline them per handset family.
+    private static final int KEY_UP = -1;
+    private static final int KEY_DOWN = -6;
+    private static final int KEY_LEFT = -2;
+    private static final int KEY_RIGHT = -5;
+    private static final int KEY_DEL = 8;
+    private static final int KEY_BACKSPACE = 8;
+    private static final int KEY_CLEAR = 12;
+    private static final int KEY_ENTER = 10;
+    private static final int KEY_SOFT1 = -4;
+    private static final int KEY_SOFT2 = -3;
+
     /** Height reserved for the input line, in pixels. */
     private int inputHeight;
     /** Height reserved for the header. */
@@ -86,8 +101,40 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     private boolean pinnedToBottom = true;
     private boolean dirty = true;
     private boolean running;
-    private boolean pumpStarted;
+    private Thread pump;
     private long lastActivityFlash;
+
+    /**
+     * Cached fonts and metrics. Font.getFont() plus the metric calls cost a
+     * native round-trip each; the old paint() paid ~15 of them per frame.
+     * Refreshed only when the canvas size changes (fonts never change
+     * otherwise; colours are read live from 'theme').
+     */
+    private int metricsW = -1;
+    private int metricsH = -1;
+    private Font fontSmall;
+    private Font fontBody;
+    private Font fontInput;
+    private int smallCharW = 6;
+    private int inputCharW = 6;
+    private int defaultFontH = 12;
+    private String promptCacheStr = "";
+    private int promptCacheW;
+
+    /**
+     * Cached header line. Rebuilt only when one of its inputs changes; the
+     * lag figure is bucketed to whole seconds so a millisecond tick does not
+     * invalidate it on every paint.
+     */
+    private String headerCache = "";
+    private String hName = "";
+    private String hTopic = "";
+    private String hState = "";
+    private int hLagBucket = -2;
+    private int hBack = -1;
+    private int hW;
+    private boolean hConnected;
+    private boolean hShowTopic;
 
     /** Custom repeat for scroll keys. */
     private int repeatKey = -1;
@@ -137,6 +184,16 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     // Attachment and lifecycle
     // ------------------------------------------------------------------
 
+    /**
+     * Request a repaint through the pump thread (lands within ~40 ms).
+     * Direct repaint() calls were removed from every mutator: each one forced
+     * a full synchronous paint, so every keystroke and scroll step painted
+     * twice. The pump coalesces them into one.
+     */
+    private void markDirty() {
+        dirty = true;
+    }
+
     public void attach(IrcConnection c, ChannelState w) {
         conn = c;
         window = w;
@@ -148,8 +205,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         pinnedToBottom = true;
         input.clear();
         focusInput = true;
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     public IrcConnection getConnection() {
@@ -162,23 +218,23 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
 
     public void applyTheme(Theme t) {
         this.theme = t;
-        view = new ChatView(t);
-        view.setShowTimestamps(showTimestamps);
-        view.setSelfNick(conn == null ? "" : conn.getServer().getSelfNick());
-        dirty = true;
-        repaint();
+        // Keep the view (and its wrap cache): setTheme() invalidates colours
+        // only, so scrollback is not rewrapped on a colour change.
+        view.setTheme(t);
+        metricsW = -1;
+        markDirty();
     }
 
     public void resume() {
         running = true;
-        if (pumpStarted) {
-            return;
+        // The pump thread exits when pause() stops it (or on any failure), so
+        // restart it whenever it is gone; the old pumpStarted flag never
+        // reset, which froze the screen after one minimise/restore cycle.
+        if (pump == null || !pump.isAlive()) {
+            pump = new Thread(this);
+            pump.start();
         }
-        pumpStarted = true;
-        // ~25 fps repaint while interacting is plenty and saves battery.
-        new Thread(this).start();
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     public void pause() {
@@ -186,25 +242,22 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     }
 
     public void onDataChanged() {
-        dirty = true;
+        markDirty();
         if (pinnedToBottom) {
             topLine = view.maxTop();
         }
-        repaint();
     }
 
     public void onStateChanged(ServerState s) {
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     public void onLagChanged() {
-        dirty = true;
+        markDirty();
     }
 
     public void setHeaderTopic(String topic) {
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     // ------------------------------------------------------------------
@@ -214,7 +267,9 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     public void run() {
         while (running) {
             try {
-                Thread.sleep(40);
+                // While the MIDlet is backgrounded nothing can be seen: poll
+                // rarely instead of spinning at 25 fps.
+                Thread.sleep(midlet.isPaused() ? 500 : 40);
                 if (repeatKey >= 0) {
                     long now = System.currentTimeMillis();
                     if (now > repeatUntil) {
@@ -249,48 +304,66 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         g.setColor(Theme.argb(theme.bg));
         g.fillRect(0, 0, w, h);
 
+        ensureMetrics(w, h);
         if (window == null || conn == null) {
             g.setColor(Theme.argb(theme.fg));
-            g.setFont(Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_MEDIUM));
+            g.setFont(fontBody);
             g.drawString("No conversation", 4, 4, Graphics.TOP | Graphics.LEFT);
             return;
         }
 
-        Font small = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_SMALL);
-        Font body = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_MEDIUM);
-        Font inputFont = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_LARGE);
-
-        headerHeight = small.getHeight() + 4;
-        inputHeight = inputFont.getHeight() + 6;
-        if (inputHeight + headerHeight >= h) {
-            // Extremely short screen (some Series 40 landscape): drop the header.
-            headerHeight = 0;
-        }
-
-        view.setFont(body);
+        // Set the body font explicitly: layout() measures through g.getFont(),
+        // and without this it would inherit whatever drawInput left behind.
+        g.setFont(fontBody);
         int textAreaH = h - headerHeight - inputHeight;
-        view.layout(g, w, textAreaH, window.getRing().snapshot());
+        view.layout(g, w, textAreaH, window.getRing());
 
         if (topLine > view.maxTop()) {
             topLine = view.maxTop();
         }
         view.paint(g, topLine, view.getVisibleRows());
-        drawScrollbar(g, textAreaH);
-        drawHeader(g, w, small);
-        drawInput(g, w, h, inputFont);
+        drawScrollbar(g, w, textAreaH);
+        drawHeader(g, w);
+        drawInput(g, w, h);
 
         g.setColor(Theme.argb(theme.bg));
         g.fillRect(0, h - inputHeight, w, 1);
     }
 
-    private void drawScrollbar(Graphics g, int areaH) {
+    /**
+     * Refresh cached fonts and derived metrics. Runs only when the canvas
+     * size changed since the last paint (or after applyTheme clears it).
+     */
+    private void ensureMetrics(int w, int h) {
+        if (w == metricsW && h == metricsH && fontSmall != null) {
+            return;
+        }
+        metricsW = w;
+        metricsH = h;
+        fontSmall = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_SMALL);
+        fontBody = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_MEDIUM);
+        fontInput = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_LARGE);
+        smallCharW = Math.max(1, fontSmall.charWidth('m'));
+        inputCharW = Math.max(1, fontInput.charWidth('m'));
+        defaultFontH = Font.getDefaultFont().getHeight();
+
+        headerHeight = fontSmall.getHeight() + 4;
+        inputHeight = fontInput.getHeight() + 6;
+        if (inputHeight + headerHeight >= h) {
+            // Extremely short screen (some Series 40 landscape): drop the header.
+            headerHeight = 0;
+        }
+        promptCacheStr = "";
+    }
+
+    private void drawScrollbar(Graphics g, int w, int areaH) {
         int total = view.getLineCount();
         int rows = view.getVisibleRows();
         if (total <= rows || rows < 1) {
             return;
         }
         int barW = 4;
-        int x = getWidth() - barW - 1;
+        int x = w - barW - 1;
         int thumbH = areaH * rows / total;
         if (thumbH < 6) {
             thumbH = 6;
@@ -301,50 +374,75 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         g.fillRect(x, thumbY, barW, thumbH);
     }
 
-    private void drawHeader(Graphics g, int w, Font small) {
+    private void drawHeader(Graphics g, int w) {
         if (headerHeight <= 0) {
             return;
         }
-        StringBuffer sb = new StringBuffer(40);
-        sb.append(window.getName());
+        String name = window.getName();
         ChannelState active = conn.getServer().getActive();
-        if (active == window && view.distanceFromBottom(topLine) > 0) {
-            sb.append(" ^");
-        }
+        int back = (active == window && view.distanceFromBottom(topLine) > 0) ? 1 : 0;
         int lag = (int) conn.getServer().getLagMs();
-        if (lag >= 0) {
-            sb.append("  ");
-            sb.append(lag);
-            sb.append("ms");
-        }
-        if (!conn.isConnected()) {
-            sb.append("  ");
-            sb.append(conn.getServer().getStateName());
-        }
-        String topic = window.getTopic();
-        if (showTopicHeader && topic.length() > 0) {
-            sb.append("  ");
-            sb.append(Str.clip(topic, w / small.charWidth('m') - 20));
+        int lagBucket = lag < 0 ? -1 : lag / 1000;
+        boolean connected = conn.isConnected();
+        String state = connected ? "" : conn.getServer().getStateName();
+        String topic = showTopicHeader ? window.getTopic() : "";
+        int wBucket = w / smallCharW;
+        if (!name.equals(hName) || !topic.equals(hTopic) || !state.equals(hState)
+                || lagBucket != hLagBucket || back != hBack || wBucket != hW
+                || connected != hConnected || showTopicHeader != hShowTopic) {
+            StringBuffer sb = new StringBuffer(40);
+            sb.append(name);
+            if (back == 1) {
+                sb.append(" ^");
+            }
+            if (lag >= 0) {
+                sb.append("  ");
+                sb.append(lag);
+                sb.append("ms");
+            }
+            if (!connected) {
+                sb.append("  ");
+                sb.append(state);
+            }
+            if (showTopicHeader && topic.length() > 0) {
+                sb.append("  ");
+                sb.append(Str.clip(topic, wBucket - 20));
+            }
+            headerCache = Str.clipWord(sb.toString(), wBucket - 1);
+            hName = name;
+            hTopic = topic;
+            hState = state;
+            hLagBucket = lagBucket;
+            hBack = back;
+            hW = wBucket;
+            hConnected = connected;
+            hShowTopic = showTopicHeader;
         }
 
         g.setColor(Theme.argb(theme.bg));
         g.fillRect(0, 0, w, headerHeight);
-        g.setFont(small);
+        g.setFont(fontSmall);
         g.setColor(Theme.argb(window.getHighlight() > 0 ? theme.unread : theme.system));
-        g.drawString(Str.clipWord(sb.toString(), w / Math.max(1, small.charWidth('m')) - 1),
-                2, 1, Graphics.TOP | Graphics.LEFT);
+        g.drawString(headerCache, 2, 1, Graphics.TOP | Graphics.LEFT);
         g.setColor(Theme.argb(theme.system));
         g.fillRect(0, headerHeight - 1, w, 1);
     }
 
-    private void drawInput(Graphics g, int w, int h, Font font) {
+    private void drawInput(Graphics g, int w, int h) {
         int y = h - inputHeight;
         g.setColor(Theme.argb(theme.inputBg));
         g.fillRect(0, y, w, inputHeight);
 
         String prompt = window.isPrivate() ? "> " : "# ";
-        g.setFont(font);
-        int promptW = font.stringWidth(prompt);
+        g.setFont(fontInput);
+        int promptW;
+        if (prompt.equals(promptCacheStr)) {
+            promptW = promptCacheW;
+        } else {
+            promptW = fontInput.stringWidth(prompt);
+            promptCacheStr = prompt;
+            promptCacheW = promptW;
+        }
         g.setColor(Theme.argb(focusInput ? theme.link : theme.timestamp));
         g.drawString(prompt, 2, y + 3, Graphics.TOP | Graphics.LEFT);
 
@@ -352,35 +450,35 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         int avail = w - promptW - 8;
         // Scroll the input horizontally when it does not fit.
         int caret = input.getCaret();
-        int caretX = font.stringWidth(text.substring(0, Math.min(caret, text.length())));
+        int caretX = fontInput.stringWidth(text.substring(0, Math.min(caret, text.length())));
         int scroll = 0;
-        if (caretX > avail - font.charWidth('m')) {
-            scroll = caretX - avail + font.charWidth('m');
+        if (caretX > avail - inputCharW) {
+            scroll = caretX - avail + inputCharW;
         }
         String shown = text;
         if (scroll > 0 && scroll < text.length()) {
             shown = text.substring(scroll);
         }
         g.setColor(Theme.argb(theme.inputFg));
-        g.drawString(Str.clip(shown, Math.max(1, avail / Math.max(1, font.charWidth('m')))),
+        g.drawString(Str.clip(shown, Math.max(1, avail / inputCharW)),
                 promptW + 2, y + 3, Graphics.TOP | Graphics.LEFT);
 
         if (focusInput) {
-            int cx = promptW + 2 - (scroll > 0 ? font.stringWidth(text.substring(0, Math.min(scroll,
-                    text.length()))) : 0) + font.stringWidth(
+            int cx = promptW + 2 - (scroll > 0 ? fontInput.stringWidth(text.substring(0, Math.min(scroll,
+                    text.length()))) : 0) + fontInput.stringWidth(
                     shown.substring(0, Math.max(0, Math.min(caret - scroll, shown.length()))));
             g.setColor(Theme.argb(theme.cursor));
             // A blinking caret; blink state is driven by the repaint loop.
             if (((System.currentTimeMillis() / 500) % 2) == 0) {
-                g.fillRect(cx, y + 3, 1, font.getHeight() - 2);
+                g.fillRect(cx, y + 3, 1, fontInput.getHeight() - 2);
             }
         }
 
         String hint = input.completionHint();
         if (hint != null && hint.length() > 0) {
-            g.setFont(Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_SMALL));
+            g.setFont(fontSmall);
             g.setColor(Theme.argb(theme.timestamp));
-            g.drawString(Str.clip(hint, w / 6), 2, y - Font.getDefaultFont().getHeight(),
+            g.drawString(Str.clip(hint, w / 6), 2, y - defaultFontH,
                     Graphics.TOP | Graphics.LEFT);
         }
     }
@@ -414,7 +512,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             case KEY_NUM8:
                 scrollDown(view.getVisibleRows() - 1);
                 return;
-            case KEY_NUM_POUND:   // == KEY_POUND (35) on every device
+            case KEY_POUND:       // '#' cycles: input <-> scroll focus
                 toggleFocus();
                 return;
             case KEY_NUM1:
@@ -425,8 +523,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
                 return;
             case KEY_NUM0:
                 showTopicHeader = !showTopicHeader;
-                dirty = true;
-                repaint();
+                markDirty();
                 return;
             case KEY_NUM7:
                 toggleTimestamps();
@@ -476,8 +573,8 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     }
 
     private boolean isSendKey(int keyCode) {
-        // KEY_STAR and KEY_ENTER both send. On S60 3rd, KEY_STAR == KEY_NUM_STAR.
-        return keyCode == KEY_STAR || keyCode == KEY_ENTER || keyCode == KEY_NUM_STAR;
+        // KEY_STAR and KEY_ENTER both send. On S60 3rd, KEY_STAR == '*'.
+        return keyCode == KEY_STAR || keyCode == KEY_ENTER;
     }
 
     private void handleChar(char c) {
@@ -504,8 +601,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             return;
         }
         input.insert(c);
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     private void startRepeat(int key) {
@@ -533,8 +629,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             topLine = 0;
         }
         pinnedToBottom = (topLine >= view.maxTop());
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     private void scrollDown(int n) {
@@ -543,15 +638,13 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             topLine = view.maxTop();
             pinnedToBottom = true;
         }
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     private void scrollToBottom() {
         topLine = view.maxTop();
         pinnedToBottom = true;
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     // ------------------------------------------------------------------
@@ -560,8 +653,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
 
     private void toggleFocus() {
         focusInput = !focusInput;
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     private void toggleTimestamps() {
@@ -594,8 +686,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             midlet.showServerList();
             return;
         }
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     private void completeNick() {
@@ -623,8 +714,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
             decorated = NickComplete.decorate(raw, word);
         }
         if (decorated != null && decorated.length > 0 && input.complete(decorated)) {
-            dirty = true;
-            repaint();
+            markDirty();
         }
     }
 
@@ -656,8 +746,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     /** Return from a sub-screen (nick list, TextBox) to this canvas. */
     void midletShow() {
         midlet.show(this);
-        dirty = true;
-        repaint();
+        markDirty();
     }
 
     /** Insert text at the caret, used by the nick list. */
@@ -692,19 +781,24 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
     }
 
     private void openCommandMenu() {
-        final javax.microedition.lcdui.Form f =
-                new javax.microedition.lcdui.Form("Commands", new String[] {
-                    "/join #channel", "/part", "/msg nick text", "/me waves",
-                    "/nick newnick", "/topic new topic", "/query nick",
-                    "/whois nick", "/names", "/away", "/back", "/clear", "/help"
-                });
+        final javax.microedition.lcdui.List f =
+                new javax.microedition.lcdui.List("Commands",
+                        javax.microedition.lcdui.Choice.EXCLUSIVE);
+        String[] cmds = new String[] {
+            "/join #channel", "/part", "/msg nick text", "/me waves",
+            "/nick newnick", "/topic new topic", "/query nick",
+            "/whois nick", "/names", "/away", "/back", "/clear", "/help"
+        };
+        for (int i = 0; i < cmds.length; i++) {
+            f.append(cmds[i], null);
+        }
         f.addCommand(new Command("Use", Command.OK, 1));
         f.setCommandListener(new CommandListener() {
             public void commandAction(Command c, Displayable d) {
-                if (c.getLabel().equals("Use")) {
+                if (c.getLabel().equals("Use") || c.getLabel().equals("Select")) {
                     int idx = f.getSelectedIndex();
                     if (idx >= 0 && idx < f.size()) {
-                        StringBuffer sb = new StringBuffer(f.getStringItem(idx));
+                        StringBuffer sb = new StringBuffer(f.getString(idx));
                         sb.append(' ');
                         input.setText(sb.toString());
                         input.setCaret(input.length());
@@ -755,8 +849,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         }
         if (c == topicCmd) {
             showTopicHeader = !showTopicHeader;
-            dirty = true;
-            repaint();
+            markDirty();
             return;
         }
         if (c == clearCmd) {
@@ -819,8 +912,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         if (idx >= 0) {
             topLine = Math.max(0, idx - view.getVisibleRows() / 2);
             pinnedToBottom = false;
-            dirty = true;
-            repaint();
+            markDirty();
         }
     }
 
@@ -833,8 +925,7 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         if (idx >= 0) {
             topLine = Math.max(0, idx - view.getVisibleRows() / 2);
             pinnedToBottom = false;
-            dirty = true;
-            repaint();
+            markDirty();
         }
     }
 
