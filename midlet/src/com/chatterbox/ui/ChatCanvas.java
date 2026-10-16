@@ -681,6 +681,9 @@ public final class ChatCanvas extends Canvas implements Runnable, CommandListene
         if (r.focus != null && r.focus != window) {
             attach(conn, r.focus);
         }
+        if (r.themeKind >= 0) {
+            midlet.setTheme(r.themeKind);
+        }
         if (r.quit) {
             conn.stopGracefully("quit command");
             midlet.showServerList();

@@ -10,6 +10,7 @@ import com.chatterbox.core.IgnoreList;
 import com.chatterbox.core.HighlightRules;
 import com.chatterbox.core.ServiceIdentify;
 import com.chatterbox.core.MessageHistory;
+import com.chatterbox.core.Theme;
 import com.chatterbox.core.CommandProcessor;
 import com.chatterbox.ui.InputLine;
 import com.chatterbox.ui.NickComplete;
@@ -520,6 +521,33 @@ public class SessionTest extends TestCase {
                 .execute(null, "/query bob");
         assertEquals(0, sender.lines.size());
         assertEquals("bob", r.focus.getName());
+    }
+
+    public void testThemeCommandSetsKind() {
+        register();
+        sender.clear();
+        CommandProcessor.Result r = new CommandProcessor(server, session, sender)
+                .execute(null, "/theme amber");
+        assertTrue(r.handled);
+        assertEquals(Theme.AMBER, r.themeKind);
+        assertEquals(0, sender.lines.size());
+    }
+
+    public void testThemeCommandAcceptsAliasesAndCase() {
+        register();
+        CommandProcessor cp = new CommandProcessor(server, session, sender);
+        assertEquals(Theme.DARK, cp.execute(null, "/theme Dark").themeKind);
+        assertEquals(Theme.LIGHT, cp.execute(null, "/theme LIGHT").themeKind);
+        assertEquals(Theme.HIGH_CONTRAST, cp.execute(null, "/theme high contrast").themeKind);
+        assertEquals(Theme.HIGH_CONTRAST, cp.execute(null, "/theme hc").themeKind);
+    }
+
+    public void testThemeCommandRejectsUnknown() {
+        register();
+        CommandProcessor.Result r = new CommandProcessor(server, session, sender)
+                .execute(null, "/theme rainbow");
+        assertEquals(-1, r.themeKind);
+        assertTrue(r.notice.length() > 0);
     }
 
     public void testWhoisCommand() {

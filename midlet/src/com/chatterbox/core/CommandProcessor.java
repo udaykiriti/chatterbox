@@ -40,6 +40,11 @@ public final class CommandProcessor {
         public boolean quit;
         /** User-facing text to show immediately. */
         public String notice = "";
+        /**
+         * The caller should switch to this theme kind (Theme.DARK/...).
+         * -1 means "no theme change requested".
+         */
+        public int themeKind = -1;
     }
 
     private final ServerState server;
@@ -187,9 +192,42 @@ public final class CommandProcessor {
         if (cmd.equals("e2e")) {
             return doE2e(rest, r);
         }
+        if (cmd.equals("theme")) {
+            return doTheme(rest, r);
+        }
 
         r.notice = "Unknown command: /" + cmd;
         r.handled = true;
+        return r;
+    }
+
+    /** Switch theme without leaving the chat. Persists via the MIDlet. */
+    private Result doTheme(String rest, Result r) {
+        r.handled = true;
+        String name = Str.lower(Str.trim(rest));
+        int kind = -1;
+        String label = "";
+        if (name.equals("dark")) {
+            kind = Theme.DARK;
+            label = "Dark";
+        } else if (name.equals("light")) {
+            kind = Theme.LIGHT;
+            label = "Light";
+        } else if (name.equals("high") || name.equals("hc")
+                || name.equals("contrast") || name.equals("highcontrast")
+                || name.equals("high contrast")) {
+            kind = Theme.HIGH_CONTRAST;
+            label = "High contrast";
+        } else if (name.equals("amber")) {
+            kind = Theme.AMBER;
+            label = "Amber";
+        }
+        if (kind < 0) {
+            r.notice = "Usage: /theme dark|light|high|amber";
+        } else {
+            r.themeKind = kind;
+            r.notice = "Theme: " + label;
+        }
         return r;
     }
 
@@ -467,7 +505,7 @@ public final class CommandProcessor {
             "/join #ch  /part [#ch]  /msg nick text  /me action  /nick newnick"
             + "  /topic text  /query nick  /whois nick  /who  /names  /mode"
             + "  /kick nick  /away [msg]  /back  /cycle  /clear  /close"
-            + "  /raw line  /e2e  /help";
+            + "  /raw line  /e2e  /theme name  /help";
 
     /** CTCP ACTION helper exposed for the UI's "/me" menu item. */
     public static String actionLine(String target, String text) {
