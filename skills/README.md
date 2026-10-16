@@ -26,6 +26,16 @@ This directory contains specialized skill guides for working with the Chatterbox
 | [security.md](security.md) | Security features and secure coding practices |
 | [docs.md](docs.md) | Documentation site — MkDocs, translations |
 | [contributing.md](contributing.md) | Contribution workflow and standards |
+| [debugging.md](debugging.md) | Systematic debugging decision trees |
+| [performance.md](performance.md) | Java ME optimization patterns |
+| [release.md](release.md) | Step-by-step release process |
+| [review.md](review.md) | Code review checklist for PRs |
+| [quick-reference.md](quick-reference.md) | Single-page cheat sheet |
+| [migration.md](migration.md) | Breaking changes and version transitions |
+| [localization.md](localization.md) | Spanish translations and i18n |
+| [dependency-audit.md](dependency-audit.md) | Tracking external dependencies |
+| [test-data.md](test-data.md) | Test fixtures and sample data |
+| [api-stability.md](api-stability.md) | API stability contract |
 
 ## Quick Start
 
@@ -112,6 +122,16 @@ Use these keywords in agent queries to route to the right skill:
 | security, sanitize, encrypt, password | `security.md` |
 | docs, documentation, mkdocs | `docs.md` |
 | contribute, pr, commit, branch | `contributing.md` |
+| debug, crash, error, exception | `debugging.md` |
+| performance, optimize, slow, memory | `performance.md` |
+| release, deploy, version, tag | `release.md` |
+| review, pr, audit, inspect | `review.md` |
+| quick, reference, cheat, sheet | `quick-reference.md` |
+| migration, breaking, upgrade | `migration.md` |
+| localization, translation, spanish | `localization.md` |
+| dependency, deps, external | `dependency-audit.md` |
+| test data, fixture, sample | `test-data.md` |
+| api, stability, contract | `api-stability.md` |
 
 ## Quick Reference
 
@@ -149,6 +169,6 @@ Use these keywords in agent queries to route to the right skill:
 
 | Complexity | Skills |
 |-----------|--------|
-| Easy | build, test, stub, docs, contributing |
-| Medium | protocol, gateway, rms, session, emulator |
-| Hard | crypto, ui, net, security |
+| Easy | build, test, stub, docs, contributing, quick-reference, localization, dependency-audit, test-data |
+| Medium | protocol, gateway, rms, session, emulator, debugging, release, review, migration, api-stability |
+| Hard | crypto, ui, net, security, performance |
