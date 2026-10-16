@@ -24,10 +24,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
 - RFC 8439 test vectors in `CryptoTest` (ChaCha20 §2.3.2/§2.4.2, Poly1305
   §2.5.2/§2.5.2 A.3, AEAD §2.8.2 encrypt/decrypt/tamper/wrong-AAD)
 - Strict base64 decoder in `Sasl` (whitespace-tolerant, padded/unpadded input)
+- Gateway health endpoint: optional HTTP `/healthz` with uptime and live
+  connection count (`GATEWAY_HEALTH_PORT`, localhost by default)
+- Python gateway test suite: relay no-loss, auth (non-ASCII), pinning, health
 - E2E key fingerprint (`/e2e`): SHA-256 of the traffic key displayed as 4 hex
   groups so peers can verify they share the same passphrase out of band
+- CI workflow: test suite + gateway syntax check run on every push/PR
 
 ### Fixed
+- `build.xml` was unusable (#1): an illegal `--` inside the header XML comment
+  aborted every Ant invocation; desktop compiles used MIDP levels 1.3/1.1
+  (rejected by any JDK ≥ 12), and the test target never compiled the JUnit
+  shim. Now: desktop/device compile split — `ant test` runs without WTK on
+  modern JDKs, device builds keep the WTK bootclasspath and 1.3/1.1 levels
 - **Poly1305 rewritten** (donna-32 style): the RFC 8439 vectors exposed broken
   limb loading, an over-permissive top-limb clamp mask (0x00ffffff → 0x000fffff),
   a tail-block pad bit written to the wrong position, and missing inter-word

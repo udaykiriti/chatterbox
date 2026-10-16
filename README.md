@@ -57,9 +57,9 @@ chatterbox/
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| **JDK** | 8–21 | Desktop compilation & tests |
+| **JDK** | 8–21 | Desktop compilation & tests (`ant test` — modern JDKs use the desktop path) |
 | **Apache Ant** | 1.10+ | Build orchestration |
-| **Sun WTK 2.5.2** | (or Nokia S60 SDK) | `preverify`, `midpapi20.jar`, `cldcapi11.jar`, emulator |
+| **Sun WTK 2.5.2** | (or Nokia S60 SDK) | Device builds only: `preverify`, `midpapi20.jar`, `cldcapi11.jar`, emulator (needs a JDK 8 toolchain for the 1.3/1.1 levels) |
 | **ProGuard** | 7.x+ | Shrink/optimize/obfuscate (optional but recommended) |
 | **Python** | 3.11+ | Gateway server |
 

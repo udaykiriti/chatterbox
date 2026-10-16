@@ -207,6 +207,13 @@ ant test -Dtest.verbose=true
 
 Total: Total: Total: **233 tests**, all must pass.
 
+### Testing Without WTK (Desktop)
+
+`ant test` works without WTK on any modern JDK: the compile target falls back
+to a *desktop path* that compiles `stub/` first and skips the MIDP
+bootclasspath (bytecode level 8). Device builds with WTK keep the MIDP levels
+(1.3/1.1, JDK 8 toolchain needed).
+
 ### Test Shim
 
 Tests run on desktop JDK using a minimal JUnit 3 shim in `test/shim/`:
