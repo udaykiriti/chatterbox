@@ -180,6 +180,8 @@ sudo systemctl enable --now chatterbox-gateway
 | `GATEWAY_RATE_LIMIT` | `10` | Client→IRC chunks/sec (flood cap; gateway→client is never throttled) |
 | `GATEWAY_TLS_CA` | *(off)* | Cert pinning via root CA: trust **only** this PEM file (strict check, overrides `GATEWAY_TLS_VERIFY`) |
 | `GATEWAY_TLS_SHA256` | *(off)* | Pin the IRC server cert by SHA-256 fingerprint (hex, colons optional) |
+| `GATEWAY_HEALTH_HOST` | `127.0.0.1` | Health endpoint bind address (localhost only by default) |
+| `GATEWAY_HEALTH_PORT` | `0` | HTTP health endpoint port (`0` = disabled) |
 | `GATEWAY_LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
 | `GATEWAY_TLS_VERIFY` | `true` | Set `false` for self-signed IRC certs |
 

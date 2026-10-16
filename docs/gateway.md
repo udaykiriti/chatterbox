@@ -262,6 +262,22 @@ ignoreregex =
 - `GATEWAY_RATE_LIMIT=0` disables the cap entirely
 - Adjust: `GATEWAY_RATE_LIMIT=20` for busier channels
 
+### Health Endpoint
+
+Set `GATEWAY_HEALTH_PORT` (e.g. `16690`) to expose a tiny HTTP endpoint for
+load balancers, docker HEALTHCHECK or monitoring scripts:
+
+```bash
+curl -s http://127.0.0.1:16690/healthz
+# {"status": "ok", "uptime_seconds": 120.4, "active_connections": 3,
+#  "max_connections": 100, "irc_target": "irc.libera.chat:6697", "tls": true}
+```
+
+- Paths: `/healthz`, `/health`, `/` (other paths → 404, non-GET → 405)
+- Binds to `GATEWAY_HEALTH_HOST` (default `127.0.0.1` — localhost only);
+  expose it intentionally if a load balancer needs to reach it (`0.0.0.0`)
+- `0` (default) disables the endpoint entirely
+
 ---
 
 ## Monitoring & Logs

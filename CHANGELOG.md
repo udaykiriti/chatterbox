@@ -11,6 +11,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
 ### Added
 - Comprehensive documentation in `docs/` (12 guides)
 - MkDocs site configuration for static documentation site
+- Gateway TLS pinning: `GATEWAY_TLS_CA` (trust only the given root) and
+  `GATEWAY_TLS_SHA256` (refuse mismatched IRC certificates)
+- Gateway health endpoint: optional HTTP `/healthz` with uptime and live
+  connection count (`GATEWAY_HEALTH_PORT`, localhost by default)
+- Python gateway test suite: relay no-loss, auth (non-ASCII), pinning, health
 - Pre-shared-key end-to-end encryption: per-profile passphrase → HKDF-SHA256 →
   ChaCha20-Poly1305 (RFC 8439); wire format `E2E:1:<base64(nonce ‖ ct ‖ tag)>`,
   nonce derived from SHA-256(key‖nick‖counter), AAD bound to sender + target,
@@ -29,6 +34,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
   exhausted — it waits for a token instead (data preserved, ~8 KiB in flight,
   TCP backpressure on the sender); throttling now applies only to the
   client → IRC direction, gateway → client is unthrottled
+- Half-closed TCP sessions now end promptly: EOF on either relay leg closes
+  both sides instead of idling until the watchdog
 - Gateway password comparison: `hmac.compare_digest` on UTF-8 bytes (non-ASCII
   passwords previously raised `TypeError` on str input)
 - `GATEWAY_RATE_LIMIT=0` disables the flood cap instead of stalling the relay

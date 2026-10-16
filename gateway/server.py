@@ -52,6 +52,8 @@ class Config:
     min_password_length: int = 16  # Minimum gateway password length
     pinned_ca_file: Optional[str] = None       # GATEWAY_TLS_CA (PEM): trust only this CA
     pinned_cert_sha256: Optional[str] = None   # GATEWAY_TLS_SHA256: pin the IRC cert (hex)
+    health_host: str = "127.0.0.1"             # health endpoint bind (localhost by default)
+    health_port: int = 0                       # GATEWAY_HEALTH_PORT (0 = disabled)
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -89,6 +91,8 @@ def load_config() -> Config:
         min_password_length=int(os.getenv("GATEWAY_MIN_PASSWORD_LEN", "16")),
         pinned_ca_file=os.getenv("GATEWAY_TLS_CA") or None,
         pinned_cert_sha256=normalize_pin(os.getenv("GATEWAY_TLS_SHA256", "")) or None,
+        health_host=os.getenv("GATEWAY_HEALTH_HOST", "127.0.0.1"),
+        health_port=int(os.getenv("GATEWAY_HEALTH_PORT", "0")),
     )
     # Config.__post_init__ validates gateway_password
     if cfg.rate_limit_per_sec <= 0:
@@ -311,12 +315,23 @@ class GatewayConnection:
                         self.irc_writer.close()
                     break
 
-        await asyncio.gather(
-            pump(self.reader, self.irc_writer, "client->irc", rate_limited=True),
-            pump(self.irc_reader, self.writer, "irc->client", rate_limited=False),
-            watchdog(),
-            return_exceptions=True
-        )
+        # End the whole session as soon as EITHER relay leg finishes (EOF or
+        # error): without this, a half-closed peer (e.g. phone drops TCP while
+        # the IRC side is silent) would leave the other leg hanging until the
+        # idle watchdog expires, keeping the socket and user slot open.
+        watch = asyncio.ensure_future(watchdog())
+        tasks = [
+            asyncio.ensure_future(pump(self.reader, self.irc_writer, "client->irc", rate_limited=True)),
+            asyncio.ensure_future(pump(self.irc_reader, self.writer, "irc->client", rate_limited=False)),
+            watch,
+        ]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for t in tasks:
+                if not t.done():
+                    t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def close(self):
         for w in (self.writer, self.irc_writer):
@@ -330,13 +345,19 @@ class GatewayConnection:
 # ---- Main Server ----
 
 async def serve(config: Config, logger: logging.Logger):
+    started_at = time.monotonic()
+    active = {"count": 0}
     semaphore = asyncio.Semaphore(config.max_connections)
     ip_limiter = IPRateLimiter(config.max_connections_per_ip)
 
     async def handler(reader, writer):
         async with semaphore:
-            conn = GatewayConnection(reader, writer, config, logger, ip_limiter)
-            await conn.run()
+            active["count"] += 1
+            try:
+                conn = GatewayConnection(reader, writer, config, logger, ip_limiter)
+                await conn.run()
+            finally:
+                active["count"] -= 1
 
     server = await asyncio.start_server(handler, config.listen_host, config.listen_port)
     addrs = ", ".join(str(sock.getsockname()) for sock in server.sockets)
@@ -344,9 +365,69 @@ async def serve(config: Config, logger: logging.Logger):
     logger.info("Relaying to %s:%d (TLS)", config.irc_host, config.irc_port)
     logger.info("Max connections: %d, max per IP: %d, rate limit: %d msg/s",
                 config.max_connections, config.max_connections_per_ip, config.rate_limit_per_sec)
+    logger.info("Cert pinning: CA=%s SHA256=%s",
+                config.pinned_ca_file, bool(config.pinned_cert_sha256))
 
-    async with server:
-        await server.serve_forever()
+    health_server = None
+    if config.health_port:
+        async def health_handler(reader, writer):
+            try:
+                # Read the complete request head (until blank line) so the OS
+                # never resets an in-flight client request on our early close.
+                status_line = ""
+                for _ in range(32):
+                    line = await asyncio.wait_for(reader.readline(), timeout=2.0)
+                    if not line or line in (b"\r\n", b"\n"):
+                        break
+                    if not status_line:
+                        status_line = line.decode("latin1")
+            except (asyncio.TimeoutError, ConnectionError):
+                writer.close()
+                return
+            parts = status_line.split()
+            method = parts[0] if parts else ""
+            path = parts[1].split("?", 1)[0] if len(parts) > 1 else ""
+            status, body = 404, b'{"error": "not found"}'
+            if method in ("GET", "HEAD") and path in ("/healthz", "/health", "/"):
+                import json
+                body = json.dumps({
+                    "status": "ok",
+                    "uptime_seconds": round(time.monotonic() - started_at, 1),
+                    "active_connections": active["count"],
+                    "max_connections": config.max_connections,
+                    "irc_target": f"{config.irc_host}:{config.irc_port}",
+                    "tls": True,
+                }).encode()
+                status = 200
+            elif method in ("GET", "HEAD"):
+                status = 404
+            else:
+                status = 405
+            reason = {200: "OK", 404: "Not Found", 405: "Method Not Allowed"}[status]
+            writer.write((f"HTTP/1.1 {status} {reason}\r\n"
+                          f"Content-Type: application/json\r\n"
+                          f"Content-Length: {len(body)}\r\n"
+                          f"Connection: close\r\n\r\n").encode())
+            if method != "HEAD":
+                writer.write(body)
+            await writer.drain()
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except Exception:
+                pass
+
+        health_server = await asyncio.start_server(
+            health_handler, config.health_host, config.health_port)
+        logger.info("Health endpoint on http://%s:%d/healthz",
+                    config.health_host, config.health_port)
+
+    try:
+        async with server:
+            await server.serve_forever()
+    finally:
+        if health_server:
+            health_server.close()
 
 def main():
     try:
