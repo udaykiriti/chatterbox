@@ -50,14 +50,20 @@ public final class LineReader {
         return overflowBytes;
     }
 
+    /** Shared empty result. Callers must treat feed/flush results as read-only. */
+    private static final Vector EMPTY = new Vector(0);
+
     /**
      * Append bytes and return every complete line they produced.
-     * @return Vector of String; empty Vector when no line completed yet.
+     * @return Vector of String; shared empty Vector when no line completed yet.
      */
     public Vector feed(byte[] data, int off, int len) {
-        Vector out = new Vector();
+        // No allocation until the first complete line: most socket reads are
+        // partial lines or keepalive traffic, and the old code built a fresh
+        // Vector per read regardless.
+        Vector out = null;
         if (data == null || len <= 0) {
-            return out;
+            return EMPTY;
         }
         ensure(len);
         int i = off;
@@ -75,6 +81,9 @@ public final class LineReader {
                 // Strip a trailing CR.
                 if (lineLen > 0 && buf[lineLen - 1] == '\r') {
                     lineLen--;
+                }
+                if (out == null) {
+                    out = new Vector();
                 }
                 out.addElement(decodeLine(lineLen));
                 count = 0;
@@ -96,7 +105,7 @@ public final class LineReader {
             }
             i++;
         }
-        return out;
+        return out == null ? EMPTY : out;
     }
 
     public Vector feed(byte[] data) {
@@ -108,14 +117,16 @@ public final class LineReader {
      * last PRIVMSG is not lost.
      */
     public Vector flush() {
-        Vector out = new Vector();
-        if (count > 0 && !overflow) {
-            int lineLen = count;
-            if (lineLen > 0 && buf[lineLen - 1] == '\r') {
-                lineLen--;
-            }
-            out.addElement(decodeLine(lineLen));
+        if (count <= 0 || overflow) {
+            reset();
+            return EMPTY;
         }
+        Vector out = new Vector();
+        int lineLen = count;
+        if (lineLen > 0 && buf[lineLen - 1] == '\r') {
+            lineLen--;
+        }
+        out.addElement(decodeLine(lineLen));
         reset();
         return out;
     }

@@ -92,20 +92,42 @@ public final class MessageRing {
     /**
      * Compact the ring into 'capacity' or fewer messages, keeping the most
      * recent ones. Used by the RMS log writer.
+     *
+     * Two passes, oldest-first appends: the old newest-first insert(0) loop
+     * memmoved the whole buffer per line (O(n^2)) on every log flush.
      */
     public synchronized void dumpTo(StringBuffer sb, int maxChars) {
+        // Pass 1 (newest first): find the oldest index that still fits, so the
+        // newest lines survive. The first line is always kept, even if huge.
+        int keepFrom = 0;
         int total = 0;
         for (int i = size - 1; i >= 0; i--) {
             Message m = get(i);
             if (m == null) {
                 continue;
             }
-            String line = "[" + m.timeStamp() + "] " + m.nick + " " + m.text + "\n";
-            if (total + line.length() > maxChars && total > 0) {
+            int len = lineLength(m);
+            if (total + len > maxChars && total > 0) {
+                keepFrom = i + 1;
                 break;
             }
-            sb.insert(0, line);
-            total += line.length();
+            total += len;
+            keepFrom = i;
         }
+        // Pass 2 (oldest first): append in chronological order.
+        for (int i = keepFrom; i < size; i++) {
+            Message m = get(i);
+            if (m == null) {
+                continue;
+            }
+            sb.append('[').append(m.timeStamp()).append("] ");
+            sb.append(m.nick).append(' ').append(m.text).append('\n');
+        }
+    }
+
+    /** Rendered length of one dump line, without building the string. */
+    private static int lineLength(Message m) {
+        // "[" + stamp + "] " + nick + " " + text + "\n"
+        return m.timeStamp().length() + m.nick.length() + m.text.length() + 5;
     }
 }

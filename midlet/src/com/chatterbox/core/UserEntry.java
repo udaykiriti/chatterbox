@@ -13,6 +13,11 @@ package com.chatterbox.core;
 public final class UserEntry {
 
     private final String nick;
+    /**
+     * RFC1459-folded nick, computed once. Binary search probed it per step,
+     * allocating a StringBuffer + String every probe; now it is free.
+     */
+    private final String folded;
     private String prefix = "";
     private String user = "";
     private String host = "";
@@ -22,10 +27,16 @@ public final class UserEntry {
 
     public UserEntry(String nick) {
         this.nick = nick == null ? "" : nick;
+        this.folded = IrcCase.normalize(this.nick);
     }
 
     public String getNick() {
         return nick;
+    }
+
+    /** Pre-folded nick for sorted lookup; never null. */
+    public String getFolded() {
+        return folded;
     }
 
     public String getPrefix() {

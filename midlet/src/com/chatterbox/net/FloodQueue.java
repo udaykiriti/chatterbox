@@ -113,7 +113,9 @@ public final class FloodQueue {
             return 0;
         }
         long deficit = 1000L - tokensMilli;
-        return (long) Math.ceil((double) deficit * (double) delayMs / 1000.0);
+        // Integer ceil: deficit < 1000 and delayMs is small, so the product
+        // cannot overflow. The old double Math.ceil ran on devices with no FPU.
+        return (deficit * delayMs + 999) / 1000;
     }
 
     private void refill() {

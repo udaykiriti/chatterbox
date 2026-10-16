@@ -371,7 +371,9 @@ public final class IrcConnection implements Sender, Runnable {
     private final class Reader implements Runnable {
         public void run() {
             LineReader framer = new LineReader();
-            byte[] buf = new byte[1024];
+            // 4 KB reads: NAMES/JOIN bursts arrive in tens of KB, and the old
+            // 1 KB buffer paid a syscall per KB. Still tiny against the heap.
+            byte[] buf = new byte[4096];
             String reason = null;
             try {
                 while (running && !stopping && connected) {
@@ -425,7 +427,11 @@ public final class IrcConnection implements Sender, Runnable {
                 while (running && !stopping && connected) {
                     long due = queue.nextDueIn();
                     if (due < 0) {
-                        Thread.sleep(250);
+                        // Nothing queued. Sleep long when the connection has
+                        // been quiet (overnight battery), but stay snappy
+                        // right after activity so a typed line sends at once.
+                        long quiet = System.currentTimeMillis() - lastWriteAt;
+                        Thread.sleep(quiet > 30000 ? 1000 : 250);
                     } else if (due == 0) {
                         String line = queue.poll();
                         if (line != null) {
@@ -437,9 +443,13 @@ public final class IrcConnection implements Sender, Runnable {
                         Thread.sleep(Math.min(due, 250L));
                     }
 
-                    long idle = System.currentTimeMillis() - lastWriteAt;
-                    if (connected && idle > config.keepaliveMs) {
-                        lastKeepalive = System.currentTimeMillis();
+                    // One clock read per loop instead of three, and the ping
+                    // itself throttled: the old code re-pinged every tick once
+                    // idle (until the PONG arrived), spamming the server.
+                    long now = System.currentTimeMillis();
+                    if (connected && now - lastWriteAt > config.keepaliveMs
+                            && now - lastKeepalive > 30000) {
+                        lastKeepalive = now;
                         session.sendKeepalivePing();
                     }
                 }

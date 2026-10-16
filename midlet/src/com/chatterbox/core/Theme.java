@@ -29,6 +29,12 @@ public final class Theme {
     public int unread;
     public int timestamp;
 
+    /** Round-robin memo for colorForNick; chat nicks repeat heavily. */
+    private static final int NICK_CACHE_SIZE = 8;
+    private final String[] nickCacheKeys = new String[NICK_CACHE_SIZE];
+    private final int[] nickCacheVals = new int[NICK_CACHE_SIZE];
+    private int nickCachePos;
+
     private Theme() {
     }
 
@@ -89,20 +95,33 @@ public final class Theme {
         if (nick == null) {
             return theme.nickAlt;
         }
+        // Memoize: a rebuild resolved every visible nick on every paint, each
+        // one allocating a lowered copy. Chat nicks repeat heavily, so a tiny
+        // round-robin cache absorbs nearly all of it.
+        for (int i = 0; i < NICK_CACHE_SIZE; i++) {
+            if (nick.equals(nickCacheKeys[i])) {
+                return nickCacheVals[i];
+            }
+        }
         String n = Str.lower(nick);
         int h = 0;
         for (int i = 0; i < n.length(); i++) {
             h = (h * 31 + n.charAt(i)) & 0x7FFFFFFF;
         }
+        int color;
         switch (h % 8) {
-            case 0: return theme.nick;
-            case 1: return theme.nickAlt;
-            case 2: return 0xC080FF;
-            case 3: return 0xFF8080;
-            case 4: return 0xFFFF80;
-            case 5: return 0x80FFC0;
-            case 6: return 0x80C0FF;
-            default: return theme.nick;
+            case 0: color = theme.nick; break;
+            case 1: color = theme.nickAlt; break;
+            case 2: color = 0xC080FF; break;
+            case 3: color = 0xFF8080; break;
+            case 4: color = 0xFFFF80; break;
+            case 5: color = 0x80FFC0; break;
+            case 6: color = 0x80C0FF; break;
+            default: color = theme.nick; break;
         }
+        nickCacheKeys[nickCachePos] = nick;
+        nickCacheVals[nickCachePos] = color;
+        nickCachePos = (nickCachePos + 1) % NICK_CACHE_SIZE;
+        return color;
     }
 }

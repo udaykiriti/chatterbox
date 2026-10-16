@@ -138,24 +138,41 @@ public final class Str {
         if (s == null || p == null || s.length() < p.length()) {
             return false;
         }
-        return s.substring(0, p.length()).equalsIgnoreCase(p);
+        for (int i = 0; i < p.length(); i++) {
+            if (foldAscii(s.charAt(i)) != foldAscii(p.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
      * Case-insensitive 'contains' using IRC casemapping. Returns the index or -1.
+     * Allocation-free: compares folded chars inline instead of lowercasing
+     * substrings, so per-message highlight checks and URL scans do not churn
+     * the heap on devices without a JIT.
      */
     public static int indexOfIgnoreCase(String s, String needle, int from) {
         if (s == null || needle == null || needle.length() == 0) {
             return -1;
         }
-        int n = lower(needle).length();
+        int n = needle.length();
         int start = from < 0 ? 0 : from;
         for (int i = start; i + n <= s.length(); i++) {
-            if (lower(s.substring(i, i + n)).equals(lower(needle))) {
+            int j = 0;
+            while (j < n && foldAscii(s.charAt(i + j)) == foldAscii(needle.charAt(j))) {
+                j++;
+            }
+            if (j == n) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /** Same mapping as lower(), but on a single char: A-Z only. */
+    private static char foldAscii(char c) {
+        return (c >= 'A' && c <= 'Z') ? (char) (c + 32) : c;
     }
 
     public static boolean containsIgnoreCase(String s, String needle) {

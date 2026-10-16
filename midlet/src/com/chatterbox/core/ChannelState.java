@@ -219,7 +219,7 @@ public final class ChannelState {
         int hi = users.size() - 1;
         while (lo <= hi) {
             int mid = (lo + hi) / 2;
-            String c = IrcCase.normalize(((UserEntry) users.elementAt(mid)).getNick());
+            String c = ((UserEntry) users.elementAt(mid)).getFolded();
             int d = c.compareTo(normalized);
             if (d == 0) {
                 return mid;
@@ -234,7 +234,7 @@ public final class ChannelState {
     }
 
     private void insertUser(UserEntry e) {
-        int at = indexOfUser(IrcCase.normalize(e.getNick()));
+        int at = indexOfUser(e.getFolded());
         if (at >= 0) {
             users.setElementAt(e, at);
             return;

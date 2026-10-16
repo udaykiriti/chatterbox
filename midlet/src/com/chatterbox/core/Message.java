@@ -36,6 +36,8 @@ public final class Message {
     public final boolean self;
     /** True when the body mentions the local user's nick. */
     public boolean highlight;
+    /** Lazily formatted "HH:MM"; 'time' is final so this never goes stale. */
+    private String stamp;
 
     public Message(long time, int kind, String nick, String text, String target,
                    boolean self, boolean highlight) {
@@ -70,10 +72,16 @@ public final class Message {
 
     /** "HH:MM" without java.text.SimpleDateFormat, which CLDC may not expose. */
     public String timeStamp() {
-        java.util.Calendar c = java.util.Calendar.getInstance();
-        c.setTime(new java.util.Date(time));
-        return Str.two(c.get(java.util.Calendar.HOUR_OF_DAY)) + ":"
-                + Str.two(c.get(java.util.Calendar.MINUTE));
+        // Formatted once and cached: Calendar.getInstance() plus a Date per
+        // call made every ChatView rebuild allocate ~600 throwaway objects.
+        // 'time' is final, so the rendering is stable for the message's life.
+        if (stamp == null) {
+            java.util.Calendar c = java.util.Calendar.getInstance();
+            c.setTime(new java.util.Date(time));
+            stamp = Str.two(c.get(java.util.Calendar.HOUR_OF_DAY)) + ":"
+                    + Str.two(c.get(java.util.Calendar.MINUTE));
+        }
+        return stamp;
     }
 
     /** Number of characters this message occupies before wrapping. */
