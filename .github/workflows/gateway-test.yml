@@ -1,0 +1,28 @@
+name: Gateway functional test
+
+on:
+  push:
+    branches: [main]
+    paths: ['gateway/**', '.github/workflows/gateway-test.yml']
+  pull_request:
+    branches: [main]
+    paths: ['gateway/**', '.github/workflows/gateway-test.yml']
+
+jobs:
+  functional:
+    name: Relay test (fake TLS IRC server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Syntax check
+        run: python3 -m py_compile gateway/server.py gateway/test_gateway.py
+
+      - name: Functional test
+        run: python3 gateway/test_gateway.py
+        timeout-minutes: 5
