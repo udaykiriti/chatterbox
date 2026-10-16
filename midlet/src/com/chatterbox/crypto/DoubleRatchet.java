@@ -195,6 +195,9 @@ public final class DoubleRatchet {
 
     private static boolean skipMessageKeys(Session session, int until) {
         if (session.receivingChainKey == null) return false;
+        // A forged header with a huge N must not hang the phone deriving
+        // billions of keys; anything past the store cap is undecryptable.
+        if (until - session.Nr > MAX_SKIP) return false;
         
         while (session.Nr < until) {
             MessageKeys mk = chainKeyToMessageKeys(session.receivingChainKey);
