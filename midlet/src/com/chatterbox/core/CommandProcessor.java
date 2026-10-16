@@ -209,7 +209,11 @@ public final class CommandProcessor {
             active = false;
         }
         r.notice = ready
-                ? (active ? "E2E is on (messages are encrypted)." : "E2E configured, key not ready.")
+                ? (active
+                        ? "E2E is on (messages are encrypted)."
+                          + " Key fingerprint: " + session.e2eFingerprint()
+                          + " - peers must match."
+                        : "E2E configured, key not ready.")
                 : "E2E is off. Set an E2E key in Settings and send /e2e again.";
         return r;
     }

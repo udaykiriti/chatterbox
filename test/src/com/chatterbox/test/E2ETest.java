@@ -407,4 +407,74 @@ public final class E2ETest extends TestCase {
         }
         return sb.toString();
     }
+
+    // ------------------------------------------------------------------
+    // Key fingerprint (passphrase verification via /e2e)
+    // ------------------------------------------------------------------
+
+    /** Same derived key always yields the same 4-group fingerprint. */
+    public void testFingerprintDeterministic() {
+        byte[] k = E2E.deriveKey(PASSPHRASE);
+        String f1 = E2E.fingerprint(k);
+        String f2 = E2E.fingerprint(E2E.deriveKey(PASSPHRASE));
+        assertNotNull(f1);
+        assertEquals("same passphrase -> same fingerprint", f1, f2);
+    }
+
+    /** Different keys yield different fingerprints; empty input is empty. */
+    public void testFingerprintDistinctAndDefaults() {
+        byte[] k1 = E2E.deriveKey("passone");
+        byte[] k2 = E2E.deriveKey("passtwo");
+        assertTrue("distinct keys differ", !E2E.fingerprint(k1).equals(E2E.fingerprint(k2)));
+        assertEquals("", E2E.fingerprint(new byte[0]));
+        assertEquals("", E2E.fingerprint(null));
+    }
+
+    /** Format: exactly four space-separated uppercase hex groups of four. */
+    public void testFingerprintFormat() {
+        String f = E2E.fingerprint(E2E.deriveKey(PASSPHRASE));
+        assertEquals("four hex groups", 4, splitGroups(f).length);
+        for (int i = 0; i < splitGroups(f).length; i++) {
+            assertEquals("group length 4", 4, splitGroups(f)[i].length());
+            assertTrue("uppercase hex", isUpperHex(splitGroups(f)[i]));
+        }
+    }
+
+    /** Session exposes the fingerprint of the active key, "" when off. */
+    public void testSessionFingerprintFollowsKey() {
+        ServerState s = new ServerState("t", "irc.test", 6697, true);
+        s.setNick("me");
+        s.setSelfNick("me");
+        s.setE2eOn(true);
+        s.setE2eKey(PASSPHRASE);
+        Session sess = new Session(s, new RecordingSender());
+        String on = sess.e2eFingerprint();
+        assertEquals("same as raw fingerprint of derived key",
+                on, E2E.fingerprint(E2E.deriveKey(PASSPHRASE)));
+
+        s.setE2eKey("");
+        assertEquals("off -> empty", "", sess.e2eFingerprint());
+    }
+
+    private static String[] splitGroups(String f) {
+        Vector parts = new Vector();
+        int from = 0;
+        while (from <= f.length()) {
+            int idx = f.indexOf(' ', from);
+            parts.addElement(idx < 0 ? f.substring(from) : f.substring(from, idx));
+            if (idx < 0) break;
+            from = idx + 1;
+        }
+        String[] out = new String[parts.size()];
+        for (int i = 0; i < out.length; i++) out[i] = (String) parts.elementAt(i);
+        return out;
+    }
+
+    private static boolean isUpperHex(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'))) return false;
+        }
+        return true;
+    }
 }

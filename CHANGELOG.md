@@ -24,6 +24,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), SemVer.
 - RFC 8439 test vectors in `CryptoTest` (ChaCha20 §2.3.2/§2.4.2, Poly1305
   §2.5.2/§2.5.2 A.3, AEAD §2.8.2 encrypt/decrypt/tamper/wrong-AAD)
 - Strict base64 decoder in `Sasl` (whitespace-tolerant, padded/unpadded input)
+- E2E key fingerprint (`/e2e`): SHA-256 of the traffic key displayed as 4 hex
+  groups so peers can verify they share the same passphrase out of band
 
 ### Fixed
 - **Poly1305 rewritten** (donna-32 style): the RFC 8439 vectors exposed broken

@@ -26,7 +26,7 @@ jobs:
           javac -encoding UTF-8 -cp build/stub -d build/classes $(find midlet/src -name '*.java')
           javac -encoding UTF-8 -cp "build/classes:build/stub" -d build/tests $(find test/shim test/src -name '*.java')
 
-      - name: Run tests (229 expected)
+      - name: Run tests
         run: java -cp "build/classes:build/tests" com.chatterbox.test.TestMain
 
   gateway:

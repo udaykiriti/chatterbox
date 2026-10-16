@@ -391,6 +391,16 @@ public final class Session {
     }
 
     /**
+     * Human-verifiable 4-group hex identity of the active E2E traffic key, or
+     * "" when E2E is off. Both peers must compare this out of band (e.g. read
+     * it aloud over a phone call) before trusting a conversation.
+     */
+    public synchronized String e2eFingerprint() {
+        byte[] k = e2eKey();
+        return k == null ? "" : E2E.fingerprint(k);
+    }
+
+    /**
      * Encrypt one outbound text for a target. Returns the PRIVMSG trailing
      * payload(s) to send; empty when E2E is off.
      */

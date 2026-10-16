@@ -77,6 +77,36 @@ public final class E2E {
                 Utf8.encode("chatterbox-e2e-key"), 32);
     }
 
+    private static final char[] HEX = {
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+        'A', 'B', 'C', 'D', 'E', 'F'
+    };
+
+    /**
+     * Short human-verifiable identity of a derived key: SHA-256 of the key,
+     * first 8 bytes folded into four hex groups ("12AB CD34 EF56 78CD").
+     * Both peers must see identical groups before trusting a channel; the
+     * display never reveals usable key material by itself. Empty string for
+     * null/empty input.
+     */
+    public static String fingerprint(byte[] key) {
+        if (key == null || key.length == 0) {
+            return "";
+        }
+        byte[] h = SHA256.hash(key);
+        StringBuffer sb = new StringBuffer(23);
+        for (int i = 0; i < 4; i++) {
+            int v = ((h[i * 2] & 0xFF) << 8) | (h[i * 2 + 1] & 0xFF);
+            if (i > 0) {
+                sb.append(' ');
+            }
+            for (int s = 12; s >= 0; s -= 4) {
+                sb.append(HEX[(v >>> s) & 0xF]);
+            }
+        }
+        return sb.toString();
+    }
+
     /** True when the key material is usable. */
     public boolean hasKey() {
         return key != null;

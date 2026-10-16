@@ -1,6 +1,6 @@
 # Chatterbox — IRC Client for Nokia S60 / Series 40 (MIDP 2.0)
 
-![Chatterbox](https://img.shields.io/badge/platform-Java_ME-orange) ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue) ![CLDC](https://img.shields.io/badge/CLDC-1.1-green) ![Build](https://img.shields.io/badge/build-Ant-yellow) ![Tests](https://img.shields.io/badge/tests-229_passing-brightgreen) ![CI](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
+![Chatterbox](https://img.shields.io/badge/platform-Java_ME-orange) ![MIDP](https://img.shields.io/badge/MIDP-2.0-blue) ![CLDC](https://img.shields.io/badge/CLDC-1.1-green) ![Build](https://img.shields.io/badge/build-Ant-yellow) ![Tests](https://img.shields.io/badge/tests-233_passing-brightgreen) ![CI](https://github.com/udaykiriti/chatterbox/actions/workflows/ci.yml/badge.svg)
 
 A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3, etc.) running Symbian S60 3rd/5th Edition or Series 40 3rd/5th Edition. Includes a companion TLS gateway server for networks that require modern TLS.
 
@@ -15,7 +15,7 @@ A production-ready IRC client for classic Nokia QWERTY phones (E63, E71, E72, C3
 | **Session** | Per-channel ring buffer (200 lines), nick lists with modes (@ + % & ~ !), unread/highlight badges, private message tabs |
 | **UI (LCDUI + Canvas)** | Server/channel list with badges, word-wrapped chat canvas with scrollback (↑/↓), nick colours, timestamps toggle, highlight on own nick, inline input with Tab nick completion, softkey menus, vibrate+beep on mention/PM |
 | **Commands** | `/join` `/part` `/msg` `/me` `/nick` `/topic` `/quit` `/query` `/whois` `/clear` `/away` `/back` `/cycle` `/names` `/kick` `/mode` `/who` `/raw` `/e2e` `/help` `/close` |
-| **E2E (pre-shared-key)** | ChaCha20-Poly1305 (RFC 8439) from a per-profile passphrase set in Settings, `/e2e` status display, AAD bound to sender+target, long texts auto-chunked, unreadable payloads render as placeholders |
+| **E2E (pre-shared-key)** | ChaCha20-Poly1305 (RFC 8439) from a per-profile passphrase set in Settings, `/e2e` status + key fingerprint (`12AB CD34 EF56 78CD`) to verify peers, AAD bound to sender+target, long texts auto-chunked, unreadable payloads render as placeholders |
 | **Robustness** | All I/O in try/catch, malformed lines never crash, backgrounding via pauseApp/startApp keeps socket alive, clean QUIT on exit |
 | **Extras** | Local RMS scrollback log, URL detection, dark/light themes, < 300 KB JAR |
 
@@ -226,7 +226,7 @@ Enable **Use TLS** — the MIDlet will try `ssl://irc.host:6697` first, and **on
 
 ### Emulator (WTK / Nokia S60 SDK)
 - [ ] `ant dist` produces `dist/chatterbox.jar` < 300 KB
-- [ ] `ant test` → **229 tests, all green**
+- [ ] `ant test` → **233 tests, all green**
 - [ ] Launch in emulator: `ant install-emu`
 - [ ] Create profile → Save → Connect → registers (001) → auto-joins channels
 - [ ] Send/receive channel messages, private messages, /me actions

@@ -83,7 +83,7 @@ test:
     [junit] Tests run: 31, Failures: 0, Errors: 0, Time elapsed: 0.2 sec
     [junit] Running com.chatterbox.test.SessionTest
     [junit] Tests run: 83, Failures: 0, Errors: 0, Time elapsed: 0.4 sec
-    [junit] Tests run: 229, Failures: 0, Errors: 0
+    [junit] Tests run: 233, Failures: 0, Errors: 0
 ```
 
 ### 2. Full Release Build (Requires WTK)
@@ -205,7 +205,7 @@ ant test -Dtest.verbose=true
 | `SecurityTest` | 29 | Sanitizer, password obfuscation |
 | `E2ETest` | 24 | Pre-shared-key E2E codec + integration |
 
-Total: **229 tests**, all must pass.
+Total: Total: Total: **233 tests**, all must pass.
 
 ### Test Shim
 
@@ -275,7 +275,7 @@ $WTK_HOME/bin/emulator -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,
 Before releasing:
 
 - [ ] `ant clean dist` completes without warnings
-- [ ] `ant test` → 229 tests pass
+- [ ] `ant test` → 233 tests pass
 - [ ] `dist/chatterbox.jar` < 300 KB
 - [ ] `dist/chatterbox.jad` has correct `MIDlet-Jar-Size` and `MIDlet-Jar-URL`
 - [ ] Tested on WTK emulator: connects, joins, chats

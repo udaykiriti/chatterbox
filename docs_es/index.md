@@ -51,7 +51,7 @@ Bienvenido a la documentación completa de **Chatterbox** — un cliente IRC lis
 - **Listas de nicks** con modos (@ + % & ~ !)
 - **Badges de highlight** + vibración/beep en mención/PM
 - **Completado de nick** con Tab en campo de entrada
-- **229 tests unitarios** pasando (protocolo, core, sesión, crypto, E2E)
+- **233 tests unitarios** pasando (protocolo, core, sesión, crypto, E2E)
 - **JAR < 300 KB** tras optimización ProGuard
 
 ---

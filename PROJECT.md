@@ -1,6 +1,6 @@
 # Chatterbox — MIDP 2.0 IRC Client with E2E Encryption
 
-**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 229 passing unit tests.**
+**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with pre-shared-key end-to-end encryption, TLS gateway fallback, and 233 passing unit tests.**
 
 ---
 
@@ -19,7 +19,7 @@ chatterbox/
 │   ├── server.py   # Asyncio TLS relay with password auth, rate limiting
 │   ├── Dockerfile  # Container build
 │   └── deploy/     # systemd unit
-├── test/           # 229 unit tests (JUnit 3 shim, no external deps)
+├── test/           # 233 unit tests (JUnit 3 shim, no external deps)
 │   ├── shim/       # Minimal JUnit 3 clone
 │   └── src/
 ├── build.xml       # Ant: compile → preverify → ProGuard → JAR/JAD
@@ -91,7 +91,7 @@ javac -encoding UTF-8 -cp build/classes -d build/tests $(find test/shim test/src
 java -cp build/classes:build/tests com.chatterbox.test.TestMain
 ```
 
-**Expected:** `✔ 229 tests, all green`
+**Expected:** `✔ 233 tests, all green`
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
@@ -101,7 +101,7 @@ java -cp build/classes:build/tests com.chatterbox.test.TestMain
 | CryptoTest | 21 | HKDF, HMAC-SHA256, SHA256, RFC 8439 vectors (ChaCha20, Poly1305, AEAD) |
 | X25519Test | 9 | RFC 7748 vectors, DH, non-canonical input handling |
 | SecurityTest | 29 | IrcSanitizer, PasswordObfuscator |
-| E2ETest | 24 | Pre-shared-key E2E codec, session + command integration |
+| E2ETest | 28 | Pre-shared-key E2E codec, session + command integration |
 
 ---
 
@@ -221,6 +221,7 @@ sudo systemctl enable --now chatterbox-gateway
 | **Cipher** | ChaCha20-Poly1305 (RFC 8439), 128-bit AEAD tag |
 | **Nonce** | SHA-256(key‖nick‖counter)[0..12]; counter seeded from epoch seconds, monotonic |
 | **AAD Binding** | `cb-e2e-v1\|<sender>\|<target>` — stops cross-channel reuse of payloads |
+| **Key Fingerprint** | SHA-256(key) → first 64 bits as `12AB CD34 EF56 78CD`, shown by `/e2e`; peers compare out of band |
 | **Wire Format** | `E2E:1:<base64(nonce ‖ ciphertext ‖ tag)>` in a normal PRIVMSG |
 | **Hash** | SHA-256 (FIPS 180-4) |
 | **SASL** | PLAIN / EXTERNAL |
