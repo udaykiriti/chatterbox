@@ -1,6 +1,6 @@
 # Chatterbox — MIDP 2.0 IRC Client with E2E Encryption
 
-**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with Signal-style end-to-end encryption, TLS gateway fallback, and 188 passing unit tests.**
+**A production-ready IRC client for Nokia S60/Series 40 (E63/E71/E72/C3) with Signal-style end-to-end encryption, TLS gateway fallback, and 197 passing unit tests.**
 
 ---
 
@@ -19,7 +19,7 @@ chatterbox/
 │   ├── server.py   # Asyncio TLS relay with password auth, rate limiting
 │   ├── Dockerfile  # Container build
 │   └── deploy/     # systemd unit
-├── test/           # 188 unit tests (JUnit 3 shim, no external deps)
+├── test/           # 197 unit tests (JUnit 3 shim, no external deps)
 │   ├── shim/       # Minimal JUnit 3 clone
 │   └── src/
 ├── build.xml       # Ant: compile → preverify → ProGuard → JAR/JAD
@@ -91,7 +91,7 @@ javac -encoding UTF-8 -cp build/classes -d build/tests $(find test/shim test/src
 java -cp build/classes:build/tests com.chatterbox.test.TestMain
 ```
 
-**Expected:** `✔ 188 tests, all green`
+**Expected:** `✔ 197 tests, all green`
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
@@ -99,6 +99,7 @@ java -cp build/classes:build/tests com.chatterbox.test.TestMain
 | CoreTest | 30 | Str, IrcCase, MessageRing, FloodQueue, ChannelState |
 | SessionTest | 81 | Full protocol flow, commands, ratchet, auto-away, service identify |
 | CryptoTest | 18 | HKDF, HMAC-SHA256, SHA256 |
+| X25519Test | 9 | RFC 7748 vectors, DH, non-canonical input handling |
 | SecurityTest | 24 | IrcSanitizer, PasswordObfuscator |
 
 ---

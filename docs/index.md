@@ -51,7 +51,7 @@ Welcome to the complete documentation for **Chatterbox** — a production-ready 
 - **Nick lists** with modes (@ + % & ~ !)
 - **Highlight badges** + vibrate/beep on mention/PM
 - **Tab nick completion** in input field
-- **129 unit tests** passing (protocol, core, session)
+- **197 unit tests** passing (protocol, core, session)
 - **< 300 KB JAR** after ProGuard optimization
 
 ---

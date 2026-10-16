@@ -124,7 +124,7 @@ Tests run on the desktop JDK — no WTK or ProGuard needed.
 ant test
 ```
 
-**Expected output:** `129 tests, all green` (or similar count)
+**Expected output:** `197 tests, all green` (or similar count)
 
 Test classes:
 - `ProtocolParserTest` — IRC line parsing, CTCP, numerics
