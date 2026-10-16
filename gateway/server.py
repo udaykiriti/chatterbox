@@ -26,6 +26,7 @@ import ssl
 import sys
 import time
 import hmac
+import hashlib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Optional
@@ -49,6 +50,8 @@ class Config:
     log_level: str = "INFO"
     tls_verify: bool = True  # MUST be True in production
     min_password_length: int = 16  # Minimum gateway password length
+    pinned_ca_file: Optional[str] = None       # GATEWAY_TLS_CA (PEM): trust only this CA
+    pinned_cert_sha256: Optional[str] = None   # GATEWAY_TLS_SHA256: pin the IRC cert (hex)
 
     def __post_init__(self):
         """Validate configuration after initialization."""
@@ -56,6 +59,16 @@ class Config:
             raise ValueError("GATEWAY_PASSWORD must be set (env var)")
         if len(self.gateway_password) < self.min_password_length:
             raise ValueError(f"GATEWAY_PASSWORD must be at least {self.min_password_length} characters")
+        if self.pinned_cert_sha256:
+            norm = normalize_pin(self.pinned_cert_sha256)
+            if len(norm) != 64:
+                raise ValueError("GATEWAY_TLS_SHA256 must be 64 hex characters (SHA-256)")
+            self.pinned_cert_sha256 = norm
+
+def normalize_pin(value: str) -> str:
+    """Normalize a cert SHA-256 pin: strip colons/spaces/quotes, lowercase hex."""
+    return "".join(c for c in value.lower() if c in "0123456789abcdef")
+
 
 def load_config() -> Config:
     # Environment variables override defaults
@@ -74,6 +87,8 @@ def load_config() -> Config:
         log_level=os.getenv("GATEWAY_LOG_LEVEL", "INFO"),
         tls_verify=os.getenv("GATEWAY_TLS_VERIFY", "true").lower() != "false",
         min_password_length=int(os.getenv("GATEWAY_MIN_PASSWORD_LEN", "16")),
+        pinned_ca_file=os.getenv("GATEWAY_TLS_CA") or None,
+        pinned_cert_sha256=normalize_pin(os.getenv("GATEWAY_TLS_SHA256", "")) or None,
     )
     # Config.__post_init__ validates gateway_password
     if cfg.rate_limit_per_sec <= 0:
@@ -220,10 +235,18 @@ class GatewayConnection:
 
     async def connect_irc(self):
         self.logger.info("Connecting to IRC %s:%d (TLS=%s)", self.config.irc_host, self.config.irc_port, True)
-        ssl_ctx = ssl.create_default_context()
-        if not self.config.tls_verify:
-            ssl_ctx.check_hostname = False
-            ssl_ctx.verify_mode = ssl.CERT_NONE
+        if self.config.pinned_ca_file:
+            # Certificate pinning via trusted root: ONLY this CA validates the
+            # chain, and hostname checking stays on. This overrides
+            # GATEWAY_TLS_VERIFY=false, since pinning implies strict trust.
+            ssl_ctx = ssl.create_default_context()
+            ssl_ctx.load_verify_locations(cafile=self.config.pinned_ca_file)
+            self.logger.info("Using pinned CA: %s", self.config.pinned_ca_file)
+        else:
+            ssl_ctx = ssl.create_default_context()
+            if not self.config.tls_verify:
+                ssl_ctx.check_hostname = False
+                ssl_ctx.verify_mode = ssl.CERT_NONE
         try:
             self.irc_reader, self.irc_writer = await asyncio.wait_for(
                 asyncio.open_connection(self.config.irc_host, self.config.irc_port, ssl=ssl_ctx),
@@ -233,6 +256,17 @@ class GatewayConnection:
             raise ConnectionError(f"IRC connect timeout after {self.config.connect_timeout}s")
         except Exception as e:
             raise ConnectionError(f"IRC connect failed: {e}")
+
+        if self.config.pinned_cert_sha256:
+            # True SPKI-style pin: hash the served certificate's DER bytes and
+            # compare to the configured fingerprint; close on any mismatch.
+            ssl_obj = self.irc_writer.get_extra_info("ssl_object")
+            der = ssl_obj.getpeercert(binary_form=True) if ssl_obj else None
+            digest = hashlib.sha256(der).hexdigest() if der else "unavailable"
+            if digest != self.config.pinned_cert_sha256:
+                self.logger.error("IRC certificate pin mismatch: got %s", digest)
+                raise ConnectionError("IRC certificate pin mismatch")
+            self.logger.info("IRC certificate pin verified: %s", digest)
 
         if self.config.irc_password:
             self.irc_writer.write(f"PASS {self.config.irc_password}\r\n".encode())

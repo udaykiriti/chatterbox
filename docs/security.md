@@ -81,16 +81,28 @@ GATEWAY_TLS_VERIFY=true
 GATEWAY_TLS_VERIFY=false
 ```
 
-### Certificate Pinning (Advanced)
+### Certificate Pinning
 
-Not implemented. Could add:
+Implemented in `gateway/server.py` — two complementary mechanisms:
+
+1. **Pinned root CA** — `GATEWAY_TLS_CA=/path/to/ca.pem`:
+   the TLS context trusts *only* this CA and keeps hostname checking on.
+   This takes precedence over `GATEWAY_TLS_VERIFY=false`.
+2. **Pinned certificate fingerprint** — `GATEWAY_TLS_SHA256=<64 hex chars>`:
+   after the handshake the gateway hashes the served certificate's DER bytes
+   and closes the connection on any mismatch. Get the value from the server:
+
+```bash
+openssl s_client -connect irc.libera.chat:6697 < /dev/null 2>/dev/null \
+  | openssl x509 -outform DER | sha256sum
+```
+
+Both may be combined for defense in depth:
+
 ```python
-# In gateway server.py
-context = ssl.create_default_context()
-context.verify_mode = ssl.CERT_REQUIRED
-context.check_hostname = True
-# Pin specific cert:
-# context.load_verify_locations(cafile="libera-ca.pem")
+# Environment
+GATEWAY_TLS_CA=/etc/chatterbox/libera-ca.pem
+GATEWAY_TLS_SHA256=4f8b...dc91
 ```
 
 ---

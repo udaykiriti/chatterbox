@@ -178,6 +178,8 @@ sudo systemctl enable --now chatterbox-gateway
 | `GATEWAY_IRC_PORT` | `6697` | Target IRC port (TLS) |
 | `GATEWAY_IRC_PASSWORD` | *(optional)* | PASS sent to IRC server |
 | `GATEWAY_RATE_LIMIT` | `10` | Client→IRC chunks/sec (flood cap; gateway→client is never throttled) |
+| `GATEWAY_TLS_CA` | *(off)* | Cert pinning via root CA: trust **only** this PEM file (strict check, overrides `GATEWAY_TLS_VERIFY`) |
+| `GATEWAY_TLS_SHA256` | *(off)* | Pin the IRC server cert by SHA-256 fingerprint (hex, colons optional) |
 | `GATEWAY_LOG_LEVEL` | `INFO` | DEBUG/INFO/WARNING/ERROR |
 | `GATEWAY_TLS_VERIFY` | `true` | Set `false` for self-signed IRC certs |
 

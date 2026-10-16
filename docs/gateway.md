@@ -184,6 +184,10 @@ All config via environment variables:
 | `GATEWAY_IRC_PORT` | No | `6697` | Target IRC port (usually 6697 TLS) |
 | `GATEWAY_IRC_PASSWORD` | No | *(empty)* | PASS sent to IRC server (if needed) |
 | `GATEWAY_RATE_LIMIT` | No | `10` | Max client→IRC chunks/second (outbound flood cap; replies are not throttled) |
+| `GATEWAY_TLS_CA` | No | *(off)* | PEM file: trust only this CA for the IRC TLS connection |
+| `GATEWAY_TLS_SHA256` | No | *(off)* | SHA-256 (hex) of the IRC server certificate — connection fails on mismatch |
+| `GATEWAY_HEALTH_HOST` | No | `127.0.0.1` | Bind address for the health endpoint |
+| `GATEWAY_HEALTH_PORT` | No | `0` | HTTP health endpoint port (0 = disabled) |
 | `GATEWAY_LOG_LEVEL` | No | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `GATEWAY_TLS_VERIFY` | No | `true` | Set `false` for self-signed IRC certs |
 | `GATEWAY_IDLE_TIMEOUT` | No | `300` | Seconds before closing idle connection |
