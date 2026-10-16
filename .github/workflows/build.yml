@@ -1,0 +1,100 @@
+name: Full build
+
+# Compile (javac) -> test (235 checks) -> package versioned JAR/JAD ->
+# upload artifacts. This is the device build minus WTK preverify and
+# ProGuard, which need a licensed SDK and run before a device release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths: ['midlet/**', 'stub/**', 'test/**', 'build.xml',
+            '.github/workflows/build.yml']
+  pull_request:
+    branches: [main]
+    paths: ['midlet/**', 'stub/**', 'test/**', 'build.xml',
+            '.github/workflows/build.yml']
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Compile, test, package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >>"$GITHUB_OUTPUT"
+          else
+            echo "version=1.0-dev+${GITHUB_SHA::7}" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Compile
+        run: |
+          mkdir -p build/stub build/classes build/tests dist
+          javac -encoding UTF-8 -d build/stub $(find stub -name '*.java')
+          javac -encoding UTF-8 -cp build/stub -d build/classes $(find midlet/src -name '*.java')
+          javac -encoding UTF-8 -cp "build/classes:build/stub" -d build/tests $(find test/shim test/src -name '*.java')
+
+      - name: Run tests
+        run: java -cp "build/classes:build/tests" com.chatterbox.test.TestMain
+
+      - name: Package JAR/JAD
+        run: |
+          python3 - "${{ steps.version.outputs.version }}" <<'EOF'
+          import sys, zipfile, os
+          version = sys.argv[1]
+          manifest = ("Manifest-Version: 1.0\r\n"
+              "MIDlet-Name: Chatterbox\r\n"
+              "MIDlet-Version: %s\r\n"
+              "MIDlet-Vendor: Chatterbox Project\r\n"
+              "MIDlet-1: Chatterbox,/icon.png,com.chatterbox.ui.ChatterboxMIDlet\r\n"
+              "MIDlet-Description: IRC client for Nokia S60 / Series 40\r\n"
+              "MIDlet-Icon: /icon.png\r\n"
+              "MIDlet-Permissions: javax.microedition.io.Connector.socket,javax.microedition.io.Connector.ssl\r\n"
+              "MIDlet-Permissions-Opt: javax.microedition.io.Connector.datagram\r\n"
+              "MIDlet-Data-Size: 51200\r\n"
+              "MicroEdition-Profile: MIDP-2.0\r\n"
+              "MicroEdition-Configuration: CLDC-1.1\r\n" % version)
+          with zipfile.ZipFile("dist/chatterbox.jar", "w", zipfile.ZIP_DEFLATED) as z:
+              z.writestr("META-INF/MANIFEST.MF", manifest)
+              for root, dirs, files in os.walk("build/classes"):
+                  for f in files:
+                      full = os.path.join(root, f)
+                      z.write(full, os.path.relpath(full, "build/classes"))
+              if os.path.exists("midlet/res/icon.png"):
+                  z.write("midlet/res/icon.png", "icon.png")
+          size = os.path.getsize("dist/chatterbox.jar")
+          with open("dist/chatterbox.jad", "w") as f:
+              f.write("MIDlet-Name: Chatterbox\n"
+                      "MIDlet-Version: %s\n"
+                      "MIDlet-Vendor: Chatterbox Project\n"
+                      "MIDlet-1: Chatterbox,/icon.png,com.chatterbox.ui.ChatterboxMIDlet\n"
+                      "MIDlet-Jar-URL: chatterbox.jar\n"
+                      "MIDlet-Jar-Size: %d\n" % (version, size) +
+                      "MIDlet-Description: IRC client for Nokia S60 / Series 40\n"
+                      "MIDlet-Icon: /icon.png\n"
+                      "MIDlet-Permissions: javax.microedition.io.Connector.socket,javax.microedition.io.Connector.ssl\n"
+                      "MIDlet-Permissions-Opt: javax.microedition.io.Connector.datagram\n"
+                      "MIDlet-Data-Size: 51200\n"
+                      "MicroEdition-Profile: MIDP-2.0\n"
+                      "MicroEdition-Configuration: CLDC-1.1\n")
+          print("packaged dist/chatterbox.jar (%d bytes), version %s" % (size, version))
+          EOF
+          ls -la dist/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: chatterbox-${{ steps.version.outputs.version }}
+          path: |
+            dist/chatterbox.jar
+            dist/chatterbox.jad
