@@ -26,7 +26,7 @@ public final class PasswordObfuscator {
         if (deviceKey != null) {
             return deviceKey;
         }
-        StringBuilder sb = new StringBuilder(64);
+        StringBuffer sb = new StringBuffer(64);
         // MicroEdition platform properties (vary by device/firmware)
         sb.append(System.getProperty("microedition.platform", ""));
         sb.append(System.getProperty("microedition.configuration", ""));

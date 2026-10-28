@@ -519,7 +519,7 @@ public final class CommandProcessor {
         if (rest.length() == 0) {
             // Show ignore list
             java.util.Vector entries = session.getIgnoreList().getEntries();
-            StringBuilder sb = new StringBuilder();
+            StringBuffer sb = new StringBuffer();
             sb.append("Ignore list (").append(entries.size()).append("):\n");
             for (int i = 0; i < entries.size(); i++) {
                 IgnoreList.Entry e = (IgnoreList.Entry) entries.elementAt(i);
@@ -562,7 +562,7 @@ public final class CommandProcessor {
         if (rest.length() == 0) {
             // Show highlights
             java.util.Vector list = session.getHighlightRules().getRules();
-            StringBuilder sb = new StringBuilder();
+            StringBuffer sb = new StringBuffer();
             sb.append("Highlight rules (").append(list.size()).append("):\n");
             for (int i = 0; i < list.size(); i++) {
                 HighlightRules.Rule hr = (HighlightRules.Rule) list.elementAt(i);
@@ -601,7 +601,7 @@ public final class CommandProcessor {
         if (rest.length() == 0) {
             // Show services
             java.util.Vector list = session.getServiceIdentify().getServices();
-            StringBuilder sb = new StringBuilder();
+            StringBuffer sb = new StringBuffer();
             sb.append("Services (").append(list.size()).append("):\n");
             for (int i = 0; i < list.size(); i++) {
                 ServiceIdentify.Service s = (ServiceIdentify.Service) list.elementAt(i);
@@ -639,7 +639,7 @@ public final class CommandProcessor {
             return r;
         }
         java.util.Vector msgs = hist.getAll();
-        StringBuilder sb = new StringBuilder();
+        StringBuffer sb = new StringBuffer();
         sb.append("History (").append(msgs.size()).append("):\n");
         for (int i = 0; i < msgs.size(); i++) {
             sb.append("  ").append(i + 1).append(". ").append((String) msgs.elementAt(i)).append("\n");

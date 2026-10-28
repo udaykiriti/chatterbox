@@ -26,7 +26,7 @@ public final class IrcSanitizer {
         if (input == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(input.length());
+        StringBuffer sb = new StringBuffer(input.length());
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
             // Allow printable ASCII (0x20-0x7E) except space (0x20), colon (0x3A), and backslash
@@ -57,7 +57,7 @@ public final class IrcSanitizer {
         if (input == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(input.length());
+        StringBuffer sb = new StringBuffer(input.length());
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
             // Allow printable ASCII and space, but not CRLF or null
@@ -92,7 +92,7 @@ public final class IrcSanitizer {
         if (s.length() == 0 || (s.charAt(0) != '#' && s.charAt(0) != '&')) {
             s = "#" + s;
         }
-        StringBuilder sb = new StringBuilder(s.length());
+        StringBuffer sb = new StringBuffer(s.length());
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (i == 0) {
@@ -117,7 +117,7 @@ public final class IrcSanitizer {
             return "";
         }
         String s = input.trim();
-        StringBuilder sb = new StringBuilder(s.length());
+        StringBuffer sb = new StringBuffer(s.length());
         boolean first = true;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
@@ -153,7 +153,7 @@ public final class IrcSanitizer {
         if (input == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(input.length());
+        StringBuffer sb = new StringBuffer(input.length());
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
             if ((c >= 0x20 && c <= 0x7E) || c == '\t') {
@@ -201,7 +201,7 @@ public final class IrcSanitizer {
         if (input == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(input.length());
+        StringBuffer sb = new StringBuffer(input.length());
         for (int i = 0; i < input.length(); i++) {
             char c = input.charAt(i);
             if (c == 0x01 || c == 0x02 || c == '\r' || c == '\n') {
