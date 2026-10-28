@@ -229,7 +229,7 @@ public final class IrcConnection implements Sender, Runnable {
 
                 SocketFactory.Opened o = SocketFactory.open(
                         server, config.gatewayHost, config.gatewayPort,
-                        config.preferTls, true, readTimeout);
+                        config.preferTls, config.requireTls, readTimeout);
                 transport = o;
                 in = o.in;
                 out = o.out;

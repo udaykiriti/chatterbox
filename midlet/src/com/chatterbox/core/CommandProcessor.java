@@ -340,13 +340,17 @@ public final class CommandProcessor {
         }
         if (!sendE2e(who, E2E.KIND_CHAT, text)) {
             sender.send(IrcCodec.privmsg(who, text));
-        }
-        ChannelState w = server.window(who, ChannelState.TYPE_PRIVATE);
-        if (w != null) {
-            Message m = new Message(System.currentTimeMillis(), Message.CHAT,
-                    server.getSelfNick(), text, who, true, false);
-            w.getRing().add(m);
-            r.focus = w;
+            ChannelState w = server.window(who, ChannelState.TYPE_PRIVATE);
+            if (w != null) {
+                Message m = new Message(System.currentTimeMillis(), Message.CHAT,
+                        server.getSelfNick(), text, who, true, false);
+                w.getRing().add(m);
+            }
+        } else {
+            ChannelState w = server.window(who, ChannelState.TYPE_PRIVATE);
+            if (w != null) {
+                r.focus = w;
+            }
         }
         return r;
     }

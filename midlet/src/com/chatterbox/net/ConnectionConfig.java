@@ -68,6 +68,7 @@ public final class ConnectionConfig {
     public static ConnectionConfig fromServer(ServerState s) {
         ConnectionConfig c = new ConnectionConfig();
         c.preferTls = s.isSecure();
+        c.requireTls = s.isSecure();
         return c;
     }
 

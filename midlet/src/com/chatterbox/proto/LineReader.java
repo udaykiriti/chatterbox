@@ -96,9 +96,10 @@ public final class LineReader {
                 } else {
                     overflow = true;
                     overflowSeen = true;
+                    overflowBytes = 0;
                 }
                 if (overflow) {
-                    overflowBytes = IrcLine.MAX_LINE_BYTES;
+                    overflowBytes++;
                 }
             } else {
                 overflowBytes++;

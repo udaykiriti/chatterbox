@@ -80,7 +80,8 @@ public final class IrcParser {
             }
             if (mid.size() >= IrcLine.MAX_PARAMS) {
                 // Absorb the tail into the trailing so we cannot overrun the
-                // heap on a hostile or desynchronised stream.
+                // heap on a hostile or desynchronised stream. The current
+                // token is included so nothing is silently dropped.
                 trailing = line.substring(start);
                 break;
             }
