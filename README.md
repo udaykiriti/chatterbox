@@ -56,7 +56,7 @@ Every push and pull request runs five workflows:
 
 > [!NOTE]
 > The packaged CI artifacts are **not** phone-installable releases: device builds still need
-> WTK `preverify` and ProGuard, which run manually before a device release.
+> WTK `preverify` and ProGuard, which run manually before a device release
 
 ---
 
